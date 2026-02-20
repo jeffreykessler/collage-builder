@@ -270,6 +270,13 @@
                     <p class="text-sm text-gray-500">9 Square</p>
                     <div class="h-16 mt-2 grid grid-cols-3 grid-rows-3 gap-1"><div class="bg-gray-300 rounded"></div><div class="bg-gray-300 rounded"></div><div class="bg-gray-300 rounded"></div><div class="bg-gray-300 rounded"></div><div class="bg-gray-300 rounded"></div><div class="bg-gray-300 rounded"></div><div class="bg-gray-300 rounded"></div><div class="bg-gray-300 rounded"></div><div class="bg-gray-300 rounded"></div></div>
                 </button>
+                <button id="custom-grid-btn" class="p-4 border-2 border-dashed border-gray-400 rounded-lg hover:border-blue-500 hover:text-blue-600 hover:shadow-lg transition-all flex flex-col justify-center items-center bg-gray-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span class="text-lg font-semibold">Custom Grid</span>
+                    <p class="text-sm text-gray-500">Define rows & columns</p>
+                </button>
                 <!-- New Templates Start -->
                 <button data-rows="1" data-cols="3" class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
                     <span class="text-lg font-semibold">1 x 3</span>
@@ -2237,6 +2244,25 @@
                     const cols = parseInt(button.dataset.cols);
                     initializeGrid(rows, cols);
                 }
+            });
+
+            document.getElementById('custom-grid-btn').addEventListener('click', () => {
+                resizeModeEditorSelect.value = resizeModeSelect.value;
+                const rowsInput = prompt("Enter number of rows (e.g., 3):", "3");
+                if (rowsInput === null) return; // User cancelled
+                
+                const colsInput = prompt("Enter number of columns (e.g., 4):", "4");
+                if (colsInput === null) return; // User cancelled
+
+                const rows = parseInt(rowsInput);
+                const cols = parseInt(colsInput);
+
+                if (isNaN(rows) || isNaN(cols) || rows <= 0 || cols <= 0 || rows > 20 || cols > 20) {
+                    alert("Please enter valid positive numbers for rows and columns (max 20).");
+                    return;
+                }
+
+                initializeGrid(rows, cols);
             });
 
             // Step 3 Controls
