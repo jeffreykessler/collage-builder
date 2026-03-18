@@ -1123,6 +1123,7 @@
                 dimensions: { w: 200, h: 100 }
             };
             let isTextCreated = false;
+            let isRestoring = false; // Prevents grid initializers from auto-populating images during project load
             let isTextDragging = false;
             let isTextResizing = false;
             let textDragStart = { x: 0, y: 0, elX: 0, elY: 0 };
@@ -1487,6 +1488,7 @@
                     updateAllSlotStyles();
 
                     setTimeout(() => {
+                        if (isRestoring) return;
                         collageSlots.forEach(slot => {
                             const imageId = slot.imageId;
                             if (imageId !== null && imageId !== undefined) { // <-- FIX for id:0
@@ -1573,6 +1575,7 @@
                     updateAllSlotStyles();
 
                     setTimeout(() => {
+                        if (isRestoring) return;
                         collageSlots.forEach(slot => {
                             const imageId = slot.imageId;
                             if (imageId !== null && imageId !== undefined) { // <-- FIX for id:0
@@ -1680,6 +1683,7 @@
                     updateAllSlotStyles();
 
                     setTimeout(() => {
+                        if (isRestoring) return;
                         collageSlots.forEach(slot => {
                             const imageId = slot.imageId;
                             if (imageId !== null && imageId !== undefined) { // <-- FIX for id:0
@@ -1805,6 +1809,7 @@
                     updateAllSlotStyles();
 
                     setTimeout(() => {
+                        if (isRestoring) return;
                         collageSlots.forEach(slot => {
                             const imageId = slot.imageId;
                             if (imageId !== null && imageId !== undefined) {
@@ -2443,6 +2448,7 @@
                 currentGridConfig = state.gridConfig;
                 textState = state.textState;
                 isTextCreated = false; // Prevent grid initializers from synchronously appending a null textElement
+                isRestoring = true;
 
                 // 2. Load images into memory
                 uploadedImages = await Promise.all(state.images.map(async (img) => {
@@ -2523,6 +2529,10 @@
                 renderImagePreviews(); // Step 1 previews
                 renderExtraImages();   // Step 3 thumbnail bar
                 showStep(3);
+                
+                setTimeout(() => {
+                    isRestoring = false;
+                }, 150);
             }
 
             // Export collage as JPG or PNG
