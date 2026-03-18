@@ -2366,14 +2366,10 @@
                         }
                     } else {
                         // Fallback for browsers without File System Access API
-                        let fileName = prompt("Enter a filename for your project:", "my_project");
-                        if (!fileName) return; // User cancelled
-                        if (!fileName.endsWith('.collage')) fileName += '.collage';
-
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = fileName;
+                        a.download = 'my_project.collage';
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
