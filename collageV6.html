@@ -2330,14 +2330,36 @@
                     const compressed = fflate.gzipSync(uint8Array, { level: 6 });
                     
                     const blob = new Blob([compressed], { type: 'application/octet-stream' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'my_project.collage';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+                    
+                    if (window.showSaveFilePicker) {
+                        try {
+                            const handle = await window.showSaveFilePicker({
+                                suggestedName: 'my_project.collage',
+                                types: [{
+                                    description: 'Collage Project File',
+                                    accept: { 'application/octet-stream': ['.collage'] },
+                                }],
+                            });
+                            const writable = await handle.createWritable();
+                            await writable.write(blob);
+                            await writable.close();
+                        } catch (err) {
+                            if (err.name !== 'AbortError') {
+                                console.error('Save failed', err);
+                                throw err;
+                            }
+                        }
+                    } else {
+                        // Fallback for browsers without File System Access API
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'my_project.collage';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }
                 } catch (e) {
                     console.error("Error saving project", e);
                     alert("Failed to save project.");
@@ -2406,7 +2428,7 @@
                 nextImageId = state.nextImageId || 0;
                 currentGridConfig = state.gridConfig;
                 textState = state.textState;
-                isTextCreated = state.isTextCreated;
+                isTextCreated = false; // Prevent grid initializers from synchronously appending a null textElement
 
                 // 2. Load images into memory
                 uploadedImages = await Promise.all(state.images.map(async (img) => {
@@ -2476,6 +2498,7 @@
                 }
 
                 // 5. Text Overlay
+                isTextCreated = state.isTextCreated;
                 if (isTextCreated) {
                     createTextElement();
                     updateTextElement();
