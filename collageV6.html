@@ -256,18 +256,34 @@
             <p class="text-gray-500 mb-6 text-center">Select all the photos you want to include. You can add, remove,
                 and reorder them later.</p>
             <div class="text-center mb-6">
-                <input type="file" id="image-upload" multiple accept="image/jpeg,image/png,image/bmp,image/webp"
-                    class="hidden">
-                <label for="image-upload"
-                    class="inline-flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md cursor-pointer transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20"
-                        fill="currentColor">
-                        <path fill-rule="evenodd"
-                            d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z"
-                            clip-rule="evenodd" />
-                    </svg>
-                    Add Images
-                </label>
+                <!-- Group Add and Load in a flex row for Step 1 -->
+                <div class="flex flex-wrap justify-center gap-4">
+                    <div>
+                        <input type="file" id="image-upload" multiple accept="image/jpeg,image/png,image/bmp,image/webp"
+                            class="hidden">
+                        <label for="image-upload"
+                            class="inline-flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md cursor-pointer transition-colors h-12">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20"
+                                fill="currentColor">
+                                <path fill-rule="evenodd"
+                                    d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            Add Images
+                        </label>
+                    </div>
+                    <div>
+                        <input type="file" id="load-project-input-step1" accept=".collage" class="hidden">
+                        <label for="load-project-input-step1"
+                            class="inline-flex items-center justify-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md cursor-pointer transition-colors h-12">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20"
+                                fill="currentColor">
+                                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                            Load Project
+                        </label>
+                    </div>
+                </div>
             </div>
             <div id="image-preview-container"
                 class="mt-6 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
@@ -1138,6 +1154,7 @@
             const fileTypeSelect = document.getElementById('file-type');
             const saveProjectBtn = document.getElementById('save-project-btn');
             const loadProjectInput = document.getElementById('load-project-input');
+            const loadProjectInputStep1 = document.getElementById('load-project-input-step1');
 
             const loadingModal = document.getElementById('loading-modal');
             const extraImagesContainer = document.getElementById('extra-images-container');
@@ -2334,6 +2351,13 @@
                 const file = e.target.files[0];
                 if (!file) return;
 
+                if (uploadedImages.length > 0) {
+                    if (!confirm("You already have a project in progress. Loading a new project will overwrite your current progress and discard unsaved changes. Do you want to continue?")) {
+                        e.target.value = ''; // Reset input
+                        return;
+                    }
+                }
+
                 loadingModal.querySelector('p').innerText = "Loading project...";
                 loadingModal.classList.remove('hidden');
 
@@ -2910,6 +2934,7 @@
             downloadBtn.addEventListener('click', exportCollage);
             saveProjectBtn.addEventListener('click', exportProjectState);
             loadProjectInput.addEventListener('change', loadProject);
+            loadProjectInputStep1.addEventListener('change', loadProject);
 
             // Text Modal Controls
             editTextBtn.addEventListener('click', openTextModal);
