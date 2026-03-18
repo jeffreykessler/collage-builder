@@ -1916,7 +1916,10 @@
                 if (existingImg) existingImg.remove();
 
                 const img = document.createElement('img');
-                img.src = image.url;
+                
+                // CRITICAL: Must prepend to DOM before setting src to avoid Chrome synchronous onload bugs
+                clipper.prepend(img); 
+
                 img.draggable = false; // Prevent the image itself from being dragged
 
                 img.onload = () => {
@@ -1951,7 +1954,8 @@
                     }
                 };
 
-                clipper.prepend(img); // Prepend to be behind controls
+                // Trigger load mechanisms last
+                img.src = image.url;
                 const placeholder = clipper.querySelector('.placeholder-text');
                 if (placeholder) placeholder.style.display = 'none';
 
@@ -2357,10 +2361,14 @@
                         }
                     } else {
                         // Fallback for browsers without File System Access API
+                        let fileName = prompt("Enter a filename for your project:", "my_project");
+                        if (!fileName) return; // User cancelled
+                        if (!fileName.endsWith('.collage')) fileName += '.collage';
+
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = 'my_project.collage';
+                        a.download = fileName;
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
