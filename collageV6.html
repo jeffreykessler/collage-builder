@@ -1,0 +1,3026 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collage Builder V6.0</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load html2canvas library for exporting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Load Split.js for draggable gutters -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.6.5/split.min.js"></script>
+    <!-- Load Google Fonts for text tool -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Caveat&family=Inter:wght@400;700&family=Lobster&family=Pacifico&family=Roboto:wght@400;700&display=swap"
+        rel="stylesheet">
+    <!-- Load fflate library for project compression -->
+    <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* --- Split.js Grid System --- */
+        .split-container-h {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            height: 100%;
+        }
+
+        .split-container-v {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Base styles for a collage slot */
+        .collage-slot {
+            position: relative;
+            /* overflow: hidden; */
+            /* We allow overflow for controls */
+            background-color: #e5e7eb;
+            /* gray-200 */
+            /* Checkerboard pattern for empty slots */
+            background-image: linear-gradient(45deg, #d1d5db 25%, transparent 25%), linear-gradient(-45deg, #d1d5db 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d1d5db 75%), linear-gradient(-45deg, transparent 75%, #d1d5db 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            /* gray-500 */
+            font-size: 0.875rem;
+            height: 100%;
+            width: 100%;
+            min-height: 50px;
+            min-width: 50px;
+            transition: background-color 0.2s;
+        }
+
+        /* Clipper div to enforce padding and corner radius */
+        .image-clipper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            transition: border-radius 0.2s;
+        }
+
+        /* Style for the image inside the slot */
+        .collage-slot img {
+            position: absolute;
+            max-width: none;
+            max-height: none;
+            width: 100%;
+            height: auto;
+            object-fit: cover;
+            cursor: move;
+            user-select: none;
+            -webkit-user-drag: none;
+            transition: transform 0.05s linear;
+            transform-origin: center center;
+        }
+
+        /* Controls for an individual image slot (pan, zoom, remove) */
+        .slot-controls {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 10;
+            display: none;
+            gap: 4px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 6px;
+            border-radius: 0.5rem;
+        }
+
+        .collage-slot:hover .slot-controls,
+        .collage-slot.active .slot-controls {
+            display: flex;
+        }
+
+        .collage-slot.selected {
+            outline: 4px solid #3b82f6;
+            /* blue-500 */
+            outline-offset: -4px;
+            z-index: 5;
+        }
+
+        .slot-controls button {
+            background-color: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 0.375rem;
+            width: 28px;
+            height: 28px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .slot-controls button:hover {
+            background-color: white;
+        }
+
+        /* --- Split.js Gutter Styling --- */
+        .gutter {
+            background-color: #FFFFFF;
+            background-repeat: no-repeat;
+            background-position: 50%;
+            transition: background-color 0.2s;
+        }
+
+        .gutter.gutter-horizontal {
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bM/5+fH5hmYmJiSs3M0M3M0M3M0AEAKoIFQVLdE/4AAAAASUVORK5CYII=');
+            cursor: col-resize;
+        }
+
+        .gutter.gutter-vertical {
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFAQMAAABo7865AAAABlBMVEVHcEzMzMzyAv2sAAAAAXRSTlMAQObYZgAAABBJREFUeF5jOAMEEAIE0wQ2QQQAJ14AEdD4SOwAAAAASUVORK5CYII=');
+            cursor: row-resize;
+        }
+
+        /* --- Text Overlay Styles --- */
+        .text-overlay {
+            position: absolute;
+            z-index: 20;
+            cursor: move;
+            padding: 8px;
+            border: 2px dashed rgba(0, 0, 0, 0.3);
+            user-select: none;
+            overflow: hidden;
+            /* For text wrapping */
+            word-wrap: break-word;
+            /* Ensure text wraps */
+        }
+
+        .text-overlay:hover,
+        .text-overlay.active {
+            border: 2px dashed #3b82f6;
+        }
+
+        .text-overlay p {
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #3b82f6;
+            border: 1px solid white;
+            border-radius: 50%;
+            z-index: 21;
+            display: none;
+        }
+
+        .text-overlay:hover .resize-handle,
+        .text-overlay.active .resize-handle {
+            display: block;
+        }
+
+        .resize-handle-nw {
+            top: -5px;
+            left: -5px;
+            cursor: nwse-resize;
+        }
+
+        .resize-handle-ne {
+            top: -5px;
+            right: -5px;
+            cursor: nesw-resize;
+        }
+
+        .resize-handle-sw {
+            bottom: -5px;
+            left: -5px;
+            cursor: nesw-resize;
+        }
+
+        .resize-handle-se {
+            bottom: -5px;
+            right: -5px;
+            cursor: nwse-resize;
+        }
+
+        /* Custom loading spinner */
+        .loader {
+            border: 4px solid #f3f4f6;
+            /* gray-100 */
+            border-top: 4px solid #3b82f6;
+            /* blue-500 */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 text-gray-800 antialiased">
+
+    <!-- Main Application Container -->
+    <div id="app" class="container mx-auto p-4 md:p-8 max-w-7xl">
+
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Collage Builder V6.0</h1>
+            <p class="text-lg text-gray-600 mt-2">Create your perfect photo collage with resizable layouts and touch
+                support.</p>
+        </header>
+
+        <!-- Step 1: Image Upload -->
+        <section id="step-1-upload" class="bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <h2 class="text-2xl font-semibold mb-4 text-center">Step 1: Upload Your Images</h2>
+            <p class="text-gray-500 mb-6 text-center">Select all the photos you want to include. You can add, remove,
+                and reorder them later.</p>
+            <div class="text-center mb-6">
+                <!-- Group Add and Load in a flex row for Step 1 -->
+                <div class="flex flex-wrap justify-center gap-4">
+                    <div>
+                        <input type="file" id="image-upload" multiple accept="image/jpeg,image/png,image/bmp,image/webp"
+                            class="hidden">
+                        <label for="image-upload"
+                            class="inline-flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md cursor-pointer transition-colors h-12">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20"
+                                fill="currentColor">
+                                <path fill-rule="evenodd"
+                                    d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            Add Images
+                        </label>
+                    </div>
+                    <div>
+                        <input type="file" id="load-project-input-step1" accept=".collage" class="hidden">
+                        <label for="load-project-input-step1"
+                            class="inline-flex items-center justify-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md cursor-pointer transition-colors h-12">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20"
+                                fill="currentColor">
+                                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                            Load Project
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div id="image-preview-container"
+                class="mt-6 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                <!-- Image previews will be added here -->
+            </div>
+            <div id="step-1-next" class="text-center mt-8 hidden">
+                <button id="next-to-templates"
+                    class="px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-colors">
+                    Next: Choose Grid &rarr;
+                </button>
+            </div>
+        </section>
+
+        <!-- Step 2: Template Selection -->
+        <section id="step-2-templates" class="bg-white p-6 md:p-8 rounded-xl shadow-lg mt-6 hidden">
+            <h2 class="text-2xl font-semibold mb-4 text-center">Step 2: Choose an Initial Grid</h2>
+
+            <!-- New: Resize Mode Selection -->
+            <div class="mb-6 max-w-xs mx-auto">
+                <label for="resize-mode" class="block text-sm font-medium text-gray-700 mb-1">Resize Mode</label>
+                <select id="resize-mode"
+                    class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <option value="width">Adjust Cell Width (Drag Vertical Lines)</option>
+                    <option value="height">Adjust Cell Height (Drag Horizontal Lines)</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Select this *before* choosing a grid. You can change it later.</p>
+            </div>
+
+            <div id="template-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                <!-- Grid starter buttons will be injected here -->
+                <button data-rows="1" data-cols="2"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">1 x 2</span>
+                    <p class="text-sm text-gray-500">2 Horizontal</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="2" data-cols="1"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">2 x 1</span>
+                    <p class="text-sm text-gray-500">2 Vertical</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="2" data-cols="2"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">2 x 2</span>
+                    <p class="text-sm text-gray-500">4 Square</p>
+                    <div class="h-16 mt-2 grid grid-cols-2 grid-rows-2 gap-1">
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="2" data-cols="3"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">2 x 3</span>
+                    <p class="text-sm text-gray-500">6 Classic</p>
+                    <div class="h-16 mt-2 grid grid-cols-3 grid-rows-2 gap-1">
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="3" data-cols="2"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">3 x 2</span>
+                    <p class="text-sm text-gray-500">6 Vertical</p>
+                    <div class="h-16 mt-2 grid grid-cols-2 grid-rows-3 gap-1">
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="3" data-cols="3"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">3 x 3</span>
+                    <p class="text-sm text-gray-500">9 Square</p>
+                    <div class="h-16 mt-2 grid grid-cols-3 grid-rows-3 gap-1">
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                    </div>
+                </button>
+                <button id="custom-grid-btn"
+                    class="p-4 border-2 border-dashed border-gray-400 rounded-lg hover:border-blue-500 hover:text-blue-600 hover:shadow-lg transition-all flex flex-col justify-center items-center bg-gray-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span class="text-lg font-semibold">Custom Grid</span>
+                    <p class="text-sm text-gray-500">Define rows & columns</p>
+                </button>
+                <!-- New Templates Start -->
+                <button data-rows="1" data-cols="3"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">1 x 3</span>
+                    <p class="text-sm text-gray-500">3 Horizontal</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="3" data-cols="1"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">3 x 1</span>
+                    <p class="text-sm text-gray-500">3 Vertical</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="1" data-cols="4"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">1 x 4</span>
+                    <p class="text-sm text-gray-500">4 Horizontal</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="4" data-cols="1"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">4 x 1</span>
+                    <p class="text-sm text-gray-500">4 Vertical</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="1" data-cols="5"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">1 x 5</span>
+                    <p class="text-sm text-gray-500">5 Horizontal</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="5" data-cols="1"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">5 x 1</span>
+                    <p class="text-sm text-gray-500">5 Vertical</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                        <div class="bg-gray-300 w-full h-full rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="2" data-cols="4"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">2 x 4</span>
+                    <p class="text-sm text-gray-500">8 Grid</p>
+                    <div class="h-16 mt-2 grid grid-cols-4 grid-rows-2 gap-1">
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="4" data-cols="2"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">4 x 2</span>
+                    <p class="text-sm text-gray-500">8 Grid</p>
+                    <div class="h-16 mt-2 grid grid-cols-2 grid-rows-4 gap-1">
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                    </div>
+                </button>
+                <button data-rows="4" data-cols="4"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">4 x 4</span>
+                    <p class="text-sm text-gray-500">16 Square</p>
+                    <div class="h-16 mt-2 grid grid-cols-4 grid-rows-4 gap-1">
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                        <div class="bg-gray-300 rounded"></div>
+                    </div>
+                </button>
+                <button data-template="main-left-stack-right-2"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">Main + 2</span>
+                    <p class="text-sm text-gray-500">1 Large, 2 Stacked</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-2/3 h-full rounded"></div>
+                        <div class="bg-gray-300 w-1/3 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+                <button data-template="main-left-stack-right-4"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">Main + 4</span>
+                    <p class="text-sm text-gray-500">1 Large, 4 Stacked</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-2/3 h-full rounded"></div>
+                        <div class="bg-gray-300 w-1/3 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+                <button data-template="stack-left-main-right-2"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">2 Stack + Main</span>
+                    <p class="text-sm text-gray-500">2 Stacked, 1 Large</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-1/3 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-2/3 h-full rounded"></div>
+                    </div>
+                </button>
+                <button data-template="stack-left-main-right-3"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">3 Stack + Main</span>
+                    <p class="text-sm text-gray-500">3 Stacked, 1 Large</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-1/3 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-2/3 h-full rounded"></div>
+                    </div>
+                </button>
+                <button data-template="stack-left-main-right-4"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">4 Stack + Main</span>
+                    <p class="text-sm text-gray-500">4 Stacked, 1 Large</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-1/3 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-2/3 h-full rounded"></div>
+                    </div>
+                </button>
+                <button data-template="main-top-stack-bottom-2"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">Main Top + 2</span>
+                    <p class="text-sm text-gray-500">1 Large, 2 Horizontal</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-2/3 rounded"></div>
+                        <div class="bg-gray-300 w-full h-1/3 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+                <button data-template="main-top-stack-bottom-4"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">Main Top + 4</span>
+                    <p class="text-sm text-gray-500">1 Large, 4 Horizontal</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-2/3 rounded"></div>
+                        <div class="bg-gray-300 w-full h-1/3 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+                <button data-template="stack-top-main-bottom-2"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">2 + Main Bottom</span>
+                    <p class="text-sm text-gray-500">2 Horizontal, 1 Large</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-1/3 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-full h-2/3 rounded"></div>
+                    </div>
+                </button>
+                <button data-template="stack-top-main-bottom-3"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">3 + Main Bottom</span>
+                    <p class="text-sm text-gray-500">3 Horizontal, 1 Large</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-1/3 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-full h-2/3 rounded"></div>
+                    </div>
+                </button>
+                <button data-template="stack-top-main-bottom-4"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">4 + Main Bottom</span>
+                    <p class="text-sm text-gray-500">4 Horizontal, 1 Large</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-1/3 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-full h-2/3 rounded"></div>
+                    </div>
+                </button>
+                <button data-template="stack-left-main-center-stack-right-2"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">2 + Main + 2</span>
+                    <p class="text-sm text-gray-500">5 Pane Horizontal</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-1/4 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-1/2 h-full rounded"></div>
+                        <div class="bg-gray-300 w-1/4 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+                <button data-template="stack-left-main-center-stack-right-4"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">4 + Main + 4</span>
+                    <p class="text-sm text-gray-500">9 Pane Horizontal</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-1/4 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-1/2 h-full rounded"></div>
+                        <div class="bg-gray-300 w-1/4 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+                <button data-template="stack-top-main-center-stack-bottom-2"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">2 + Main + 2</span>
+                    <p class="text-sm text-gray-500">5 Pane Vertical</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-1/4 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-full h-1/2 rounded"></div>
+                        <div class="bg-gray-300 w-full h-1/4 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+                <button data-template="stack-top-main-center-stack-bottom-4"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">4 + Main + 4</span>
+                    <p class="text-sm text-gray-500">9 Pane Vertical</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-1/4 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-full h-1/2 rounded"></div>
+                        <div class="bg-gray-300 w-full h-1/4 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+                <!-- New Templates End -->
+
+                <!-- Custom Nested Template -->
+                <button data-template="main-left-stack-right-3"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">Main + 3</span>
+                    <p class="text-sm text-gray-500">1 Large, 3 Stacked</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-2/3 h-full rounded"></div>
+                        <div class="bg-gray-300 w-1/3 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+                <button data-template="main-top-stack-bottom-3"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">Main Top + 3</span>
+                    <p class="text-sm text-gray-500">1 Large, 3 Horizontal</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-2/3 rounded"></div>
+                        <div class="bg-gray-300 w-full h-1/3 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+                <button data-template="large-center-3x3"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">Large Center</span>
+                    <p class="text-sm text-gray-500">3x3, Large Center</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-1/5 flex gap-1">
+                            <div class="bg-gray-400 w-1/5 h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-3/5 h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-1/5 h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-full h-3/5 flex gap-1">
+                            <div class="bg-gray-400 w-1/5 h-full rounded-sm"></div>
+                            <div class="bg-gray-500 w-3/5 h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-1/5 h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-full h-1/5 flex gap-1">
+                            <div class="bg-gray-400 w-1/5 h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-3/5 h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-1/5 h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+
+                <!-- Symmetrical Templates -->
+                <button data-template="stack-left-main-center-stack-right-3"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">3 + Main + 3</span>
+                    <p class="text-sm text-gray-500">Symmetrical 7</p>
+                    <div class="h-16 mt-2 flex gap-1">
+                        <div class="bg-gray-300 w-1/4 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-1/2 h-full rounded"></div>
+                        <div class="bg-gray-300 w-1/4 h-full flex flex-col gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+                <button data-template="stack-top-main-center-stack-bottom-3"
+                    class="grid-starter-btn p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all">
+                    <span class="text-lg font-semibold">3 + Main + 3</span>
+                    <p class="text-sm text-gray-500">Vertical 7</p>
+                    <div class="h-16 mt-2 flex flex-col gap-1">
+                        <div class="bg-gray-300 w-full h-1/4 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                        <div class="bg-gray-300 w-full h-1/2 rounded"></div>
+                        <div class="bg-gray-300 w-full h-1/4 flex gap-0.5">
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                            <div class="bg-gray-400 w-full h-full rounded-sm"></div>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            <div class="text-center mt-6">
+                <button id="back-to-upload"
+                    class="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg transition-colors">
+                    &larr; Back to Upload
+                </button>
+            </div>
+        </section>
+
+        <!-- Step 3: Edit Collage -->
+        <section id="step-3-edit" class="mt-6 hidden">
+            <h2 class="text-2xl font-semibold mb-4 text-center">Step 3: Edit Your Collage</h2>
+
+            <!-- Controls: Re-ordered -->
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-lg mb-6 flex flex-col gap-y-4">
+                <div class="flex flex-wrap gap-x-6 gap-y-4 justify-center items-end">
+                    <!-- Spacing -->
+                    <div>
+                        <label for="spacing-size" class="block text-sm font-medium text-gray-700 mb-1">Spacing</label>
+                        <select id="spacing-size"
+                            class="w-full md:w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="0">None</option>
+                            <option value="4">Small</option>
+                            <option value="8">Medium</option>
+                            <option value="16">Large</option>
+                        </select>
+                    </div>
+                    <!-- Border Color -->
+                    <div>
+                        <label for="border-color" class="block text-sm font-medium text-gray-700 mb-1">Border
+                            Color</label>
+                        <input type="color" id="border-color" value="#FFFFFF"
+                            class="w-16 h-10 p-1 border border-gray-300 rounded-md cursor-pointer">
+                    </div>
+                    <!-- Corner Radius -->
+                    <div>
+                        <label for="corner-radius" class="block text-sm font-medium text-gray-700 mb-1">Corner
+                            Radius</label>
+                        <select id="corner-radius"
+                            class="w-full md:w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="0">None</option>
+                            <option value="8">Small</option>
+                            <option value="16">Medium</option>
+                            <option value="32">Large</option>
+                            <option value="9999">Oval / Circle</option>
+                        </select>
+                    </div>
+                    <!-- Aspect Ratio -->
+                    <div>
+                        <label for="aspect-ratio" class="block text-sm font-medium text-gray-700 mb-1">Aspect
+                            Ratio</label>
+                        <select id="aspect-ratio"
+                            class="w-full md:w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="1/1" selected>1:1 (Square)</option>
+                            <option value="4/6">4:6 (Portrait)</option>
+                            <option value="6/4">6:4 (Landscape)</option>
+                            <option value="8.5/11">8.5:11 (Portrait)</option>
+                            <option value="11/8.5">11:8.5 (Landscape)</option>
+                        </select>
+                    </div>
+                    <!-- Resize Mode (for new grids) -->
+                    <div>
+                        <label for="resize-mode-editor" class="block text-sm font-medium text-gray-700 mb-1">Resize
+                            Mode</label>
+                        <select id="resize-mode-editor"
+                            class="w-full md:w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-10">
+                            <option value="width">Adjust Cell Width</option>
+                            <option value="height">Adjust Cell Height</option>
+                        </select>
+                    </div>
+                    <!-- Edit Text -->
+                    <div>
+                        <button id="edit-text"
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition-colors flex items-center h-10">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20"
+                                fill="currentColor">
+                                <path
+                                    d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                                <path fill-rule="evenodd"
+                                    d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            Edit Text
+                        </button>
+                    </div>
+                    <!-- Change Grid -->
+                    <div>
+                        <button id="change-template"
+                            class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg transition-colors h-10">
+                            Change Grid
+                        </button>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-x-6 gap-y-4 justify-center items-end">
+                    <!-- Download -->
+                    <div>
+                        <button id="download-btn"
+                            class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition-colors flex items-center h-10">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20"
+                                fill="currentColor">
+                                <path fill-rule="evenodd"
+                                    d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L10 10.586l2.293-2.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                                    clip-rule="evenodd" />
+                                <path fill-rule="evenodd"
+                                    d="M10 3a1 1 0 011 1v6.586l2.293-2.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L9 10.586V4a1 1 0 011-1z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                            Download
+                        </button>
+                    </div>
+                    <!-- File Type -->
+                    <div>
+                        <label for="file-type" class="block text-sm font-medium text-gray-700 mb-1">File Type</label>
+                        <select id="file-type"
+                            class="w-full md:w-auto rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-10">
+                            <option value="jpg">.jpg</option>
+                            <option value="png">.png</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Project Controls -->
+                <div class="flex flex-wrap gap-x-6 gap-y-4 justify-center items-end mt-4 border-t pt-4 border-gray-200">
+                    <div>
+                        <button id="save-project-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-md transition-colors flex items-center h-10">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L10 10.586l2.293-2.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v6.586l2.293-2.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L9 10.586V4a1 1 0 011-1z" clip-rule="evenodd" />
+                            </svg>
+                            Save Project
+                        </button>
+                    </div>
+                    <div>
+                        <input type="file" id="load-project-input" accept=".collage" class="hidden">
+                        <label for="load-project-input" class="inline-flex items-center justify-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md cursor-pointer transition-colors h-10">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                            Load Project
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- The Collage Area -->
+            <div id="collage-wrapper"
+                class="w-full max-w-4xl mx-auto bg-gray-300 rounded-xl shadow-inner overflow-hidden"
+                style="aspect-ratio: 1/1;">
+                <!-- V2: This container will be filled by split.js -->
+                <div id="collage-container" class="w-full h-full relative" style="background-color: #FFFFFF;">
+                    <!-- Collage slots will be injected here -->
+                    <!-- Text overlay will be injected here -->
+                </div>
+            </div>
+
+            <!-- Extra images thumbnail bar -->
+            <div class="bg-white p-4 rounded-xl shadow-lg mt-6">
+                <h3 class="text-lg font-semibold mb-3">Your Images</h3>
+                <div id="extra-images-container" class="flex flex-wrap gap-2">
+                    <!-- Thumbnails of all uploaded images will go here -->
+                    <button id="add-more-images"
+                        class="w-16 h-16 bg-gray-200 hover:bg-gray-300 text-gray-500 flex items-center justify-center rounded-md shadow cursor-pointer"
+                        title="Add More Images">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Loading Modal -->
+        <div id="loading-modal"
+            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center">
+                <div class="loader"></div>
+                <p class="mt-4 text-lg font-medium text-gray-700">Exporting your collage...</p>
+            </div>
+        </div>
+
+        <!-- Text Edit Modal -->
+        <div id="text-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-40 hidden">
+            <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg" @click.stop>
+                <h3 class="text-2xl font-semibold mb-6">Edit Text</h3>
+
+                <!-- Text Content -->
+                <div class="mb-4">
+                    <label for="text-input" class="block text-sm font-medium text-gray-700 mb-1">Text</label>
+                    <textarea id="text-input" rows="3"
+                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                    <!-- Font -->
+                    <div>
+                        <label for="text-font" class="block text-sm font-medium text-gray-700 mb-1">Font</label>
+                        <select id="text-font"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="Inter" style="font-family: 'Inter', sans-serif;">Inter</option>
+                            <option value="Roboto" style="font-family: 'Roboto', sans-serif;">Roboto</option>
+                            <option value="Lobster" style="font-family: 'Lobster', cursive;">Lobster</option>
+                            <option value="Pacifico" style="font-family: 'Pacifico', cursive;">Pacifico</option>
+                            <option value="Caveat" style="font-family: 'Caveat', cursive;">Caveat</option>
+                        </select>
+                    </div>
+                    <!-- Size -->
+                    <div>
+                        <label for="text-size" class="block text-sm font-medium text-gray-700 mb-1">Size (px)</label>
+                        <input type="number" id="text-size" value="24" min="8" max="144"
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <!-- Style (Bold/Underline) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Style</label>
+                        <div class="flex gap-2">
+                            <!-- FIXED BOLD ICON -->
+                            <button id="text-bold-btn"
+                                class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-600"
+                                data-active="false" title="Bold">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" fill="currentColor"
+                                    viewBox="0 0 16 16">
+                                    <path
+                                        d="M8.21 13c2.106 0 3.412-1.087 3.412-2.823 0-1.306-.984-2.283-2.324-2.386v-.055a2.176 2.176 0 0 0 1.851-2.14c0-1.51-1.162-2.46-3.014-2.46H3.843V13H8.21zM5.908 4.674h1.696c.963 0 1.517.451 1.517 1.244 0 .834-.629 1.32-1.73 1.32H5.908V4.674zm0 4.588h1.85c1.217 0 1.88.492 1.88 1.415 0 .943-.68 1.517-1.944 1.517H5.908V9.262z" />
+                                </svg>
+                            </button>
+                            <!-- FIXED UNDERLINE ICON -->
+                            <button id="text-underline-btn"
+                                class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-600"
+                                data-active="false" title="Underline">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" fill="currentColor"
+                                    viewBox="0 0 16 16">
+                                    <path
+                                        d="M5.313 3.136h-1.23V9.54c0 2.105 1.47 3.623 3.917 3.623s3.917-1.518 3.917-3.623V3.136h-1.23v6.323c0 1.49-.978 2.57-2.687 2.57-1.709 0-2.687-1.08-2.687-2.57V3.136zM12.5 15h-9a.5.5 0 0 1 0-1h9a.5.5 0 0 1 0 1z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Text Color -->
+                    <div>
+                        <label for="text-color" class="block text-sm font-medium text-gray-700 mb-1">Text Color</label>
+                        <input type="color" id="text-color" value="#000000"
+                            class="w-full h-10 p-1 border border-gray-300 rounded-md cursor-pointer">
+                    </div>
+                    <!-- Background Toggle -->
+                    <div>
+                        <label for="text-bg-toggle"
+                            class="block text-sm font-medium text-gray-700 mb-1">Background</label>
+                        <select id="text-bg-toggle"
+                            class="w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="transparent">Transparent</option>
+                            <option value="opaque">Opaque</option>
+                        </select>
+                    </div>
+                    <!-- Background Color -->
+                    <div>
+                        <label for="text-bg-color" class="block text-sm font-medium text-gray-700 mb-1">BG Color</label>
+                        <input type="color" id="text-bg-color" value="#FFFFFF"
+                            class="w-full h-10 p-1 border border-gray-300 rounded-md cursor-pointer" disabled>
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex justify-between">
+                    <button id="delete-text-btn"
+                        class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md transition-colors">
+                        Delete Text
+                    </button>
+                    <div class="flex gap-4">
+                        <button id="cancel-text-btn"
+                            class="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg transition-colors">
+                            Cancel
+                        </button>
+                        <button id="ok-text-btn"
+                            class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition-colors">
+                            OK
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div> <!-- End #app -->
+
+    <!-- Hidden file input for changing a single image -->
+    <input type="file" id="image-change" accept="image/jpeg,image/png,image/bmp,image/webp" class="hidden">
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- STATE ---
+            let uploadedImages = []; // Stores { id, file, url }
+            let collageSlots = []; // Stores { element, imageId, transform, splitSizes }
+            let activeSlot = null; // The slot DOM element being panned/zoomed
+            let selectedSlot = null; // The slot selected for click-to-replace
+            let isPanning = false;
+            let panStart = { x: 0, y: 0, mouseX: 0, mouseY: 0 };
+            let dragImageId = null; // ID of image being dragged from the bottom bar
+            let draggedSlot = null; // The slot element being dragged for swapping
+            let nextImageId = 0; // Simple unique ID for images
+            let splitInstances = []; // To store Split.js instances
+            let currentGridConfig = null; // Stores { type, rows, cols, template }
+            let isRebuilding = false; // Flag to prevent multiple rebuilds
+
+            // --- Text State ---
+            let textElement = null; // The single text overlay div
+            let textState = {
+                content: "Your Text Here",
+                font: "Inter",
+                fontSize: 24,
+                color: "#000000",
+                isBold: false,
+                isUnderlined: false,
+                bgToggle: "transparent",
+                bgColor: "#FFFFFF",
+                pos: { x: 10, y: 10 },
+                dimensions: { w: 200, h: 100 }
+            };
+            let isTextCreated = false;
+            let isTextDragging = false;
+            let isTextResizing = false;
+            let textDragStart = { x: 0, y: 0, elX: 0, elY: 0 };
+            let textResizeStart = { x: 0, y: 0, elX: 0, elY: 0, elW: 0, elH: 0 };
+
+            // --- DOM ELEMENTS ---
+            const step1 = document.getElementById('step-1-upload');
+            const step2 = document.getElementById('step-2-templates');
+            const step3 = document.getElementById('step-3-edit');
+
+            const imageUploadInput = document.getElementById('image-upload');
+            const imagePreviewContainer = document.getElementById('image-preview-container');
+            const step1Next = document.getElementById('step-1-next');
+            const nextToTemplatesBtn = document.getElementById('next-to-templates');
+            const backToUploadBtn = document.getElementById('back-to-upload');
+
+            const templateGrid = document.getElementById('template-grid');
+            const resizeModeSelect = document.getElementById('resize-mode'); // In Step 2
+
+            const collageContainer = document.getElementById('collage-container');
+            const collageWrapper = document.getElementById('collage-wrapper');
+            const spacingSelect = document.getElementById('spacing-size');
+            const borderColorInput = document.getElementById('border-color');
+            const cornerRadiusSelect = document.getElementById('corner-radius');
+            const aspectRatioSelect = document.getElementById('aspect-ratio');
+            const resizeModeEditorSelect = document.getElementById('resize-mode-editor'); // In Step 3
+            const changeTemplateBtn = document.getElementById('change-template');
+            const downloadBtn = document.getElementById('download-btn');
+            const fileTypeSelect = document.getElementById('file-type');
+            const saveProjectBtn = document.getElementById('save-project-btn');
+            const loadProjectInput = document.getElementById('load-project-input');
+            const loadProjectInputStep1 = document.getElementById('load-project-input-step1');
+
+            const loadingModal = document.getElementById('loading-modal');
+            const extraImagesContainer = document.getElementById('extra-images-container');
+            const addMoreImagesBtn = document.getElementById('add-more-images');
+
+            const imageChangeInput = document.getElementById('image-change');
+
+            // Text Modal DOM
+            const textModal = document.getElementById('text-modal');
+            const editTextBtn = document.getElementById('edit-text');
+            const cancelTextBtn = document.getElementById('cancel-text-btn');
+            const okTextBtn = document.getElementById('ok-text-btn');
+            const deleteTextBtn = document.getElementById('delete-text-btn');
+            const textInput = document.getElementById('text-input');
+            const textFontSelect = document.getElementById('text-font');
+            const textSizeInput = document.getElementById('text-size');
+            const textBoldBtn = document.getElementById('text-bold-btn');
+            const textUnderlineBtn = document.getElementById('text-underline-btn');
+            const textColorInput = document.getElementById('text-color');
+            const textBgToggle = document.getElementById('text-bg-toggle');
+            const textBgColorInput = document.getElementById('text-bg-color');
+
+            // --- FUNCTIONS ---
+
+            // Show a specific step and hide others
+            function showStep(stepNum) {
+                step1.classList.add('hidden');
+                step2.classList.add('hidden');
+                step3.classList.add('hidden');
+                if (stepNum === 1) step1.classList.remove('hidden');
+                if (stepNum === 2) step2.classList.remove('hidden');
+                if (stepNum === 3) step3.classList.remove('hidden');
+            }
+
+            // Handle initial image uploads
+            function handleImageUpload(e) {
+                const files = e.target.files;
+                if (!files) return;
+
+                let newImages = Array.from(files).map(file => {
+                    const id = nextImageId++;
+                    return {
+                        id: id,
+                        file: file,
+                        url: URL.createObjectURL(file)
+                    }
+                });
+
+                uploadedImages = uploadedImages.concat(newImages);
+                renderImagePreviews(); // Update Step 1
+                renderExtraImages(); // Update Step 3
+            }
+
+            // Render the previews in Step 1
+            function renderImagePreviews() {
+                imagePreviewContainer.innerHTML = ''; // Clear old previews
+
+                if (uploadedImages.length > 0) {
+                    step1Next.classList.remove('hidden');
+                } else {
+                    step1Next.classList.add('hidden');
+                }
+
+                uploadedImages.forEach(image => {
+                    const previewWrapper = document.createElement('div');
+                    previewWrapper.className = 'relative group';
+
+                    const img = document.createElement('img');
+                    img.src = image.url;
+                    img.className = 'w-full h-24 object-cover rounded-md shadow-md';
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-btn absolute top-1 right-1 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center font-bold opacity-0 group-hover:opacity-100 transition-opacity';
+                    removeBtn.innerHTML = '&times;';
+                    removeBtn.title = 'Remove Image';
+                    removeBtn.dataset.id = image.id;
+
+                    previewWrapper.appendChild(img);
+                    previewWrapper.appendChild(removeBtn);
+                    imagePreviewContainer.appendChild(previewWrapper);
+                });
+            }
+
+            // Remove an image from the global list
+            function removeImage(idToRemove) {
+                const id = parseInt(idToRemove);
+                uploadedImages = uploadedImages.filter(image => image.id !== id);
+
+                renderImagePreviews();
+                renderExtraImages();
+
+                // Also remove from collage slots if it's in use
+                collageSlots.forEach(slot => {
+                    if (slot.imageId === id) {
+                        removeImageFromSlot(slot.element);
+                    }
+                });
+            }
+
+
+            // --- V2: Dynamic Grid Functions ---
+
+            // Helper to get current state (images, transforms) before rebuilding
+            function getGridState() {
+                const state = {
+                    slots: [],
+                    splits: []
+                };
+
+                // Get image and transform for each slot
+                state.slots = collageSlots.map(slot => ({
+                    id: slot.element.id,
+                    imageId: slot.imageId,
+                    transform: slot.transform
+                }));
+
+                // Get sizes from split.js instances
+                state.splits = splitInstances.map(split => split.getSizes());
+
+                return state;
+            }
+
+            // Helper to re-apply state after rebuilding
+            function setGridState(state) {
+                if (!state || !state.slots) return;
+
+                // Re-apply images and transforms
+                state.slots.forEach(slotState => {
+                    const slot = collageSlots.find(s => s.element.id === slotState.id);
+                    if (slot && (slotState.imageId !== null && slotState.imageId !== undefined)) {
+                        slot.imageId = slotState.imageId;
+                        slot.transform = slotState.transform;
+
+                        const image = uploadedImages.find(img => img.id === slot.imageId);
+                        if (image) {
+                            addImageToSlot(slot.element, image, false); // Don't reset transform
+                            applyTransform(slot.element);
+                        }
+                    }
+                });
+
+                // Re-apply split sizes
+                if (state.splits && state.splits.length === splitInstances.length) {
+                    splitInstances.forEach((split, index) => {
+                        split.setSizes(state.splits[index]);
+                    });
+                }
+            }
+
+            // Central function to rebuild the grid while saving state
+            function rebuildGrid() {
+                if (isRebuilding || !currentGridConfig) return;
+
+                isRebuilding = true;
+                const oldState = getGridState();
+
+                // Call the appropriate init function
+                switch (currentGridConfig.type) {
+                    case 'grid':
+                        initializeGrid(currentGridConfig.rows, currentGridConfig.cols);
+                        break;
+                    case 'nested':
+                        initializeNestedLayout(currentGridConfig.config);
+                        break;
+                    case 'triple':
+                        initializeTripleLayout(currentGridConfig.config);
+                        break;
+                    case 'large-center':
+                        initializeLargeCenterLayout();
+                        break;
+                }
+
+                // Re-apply the old state (images, transforms, sizes)
+                // We wrap this in a timeout to let the new grid render
+                setTimeout(() => {
+                    setGridState(oldState);
+                    isRebuilding = false;
+                }, 100);
+            }
+
+
+            // Helper function to create a gutter
+            function createGutter(index, direction) {
+                const gutter = document.createElement('div');
+                gutter.className = `gutter gutter-${direction}`;
+                return gutter;
+            }
+
+            // Main function for simple NxM grids
+            function initializeGrid(numRows, numCols) {
+                currentGridConfig = { type: 'grid', rows: numRows, cols: numCols };
+                // Sync the two resize mode dropdowns
+                const resizeMode = resizeModeEditorSelect.value;
+                resizeModeSelect.value = resizeMode;
+
+                splitInstances.forEach(split => split.destroy());
+                splitInstances = [];
+                collageSlots = [];
+                collageContainer.innerHTML = '';
+                // Ensure container is relative for text box
+                collageContainer.className = 'w-full h-full relative'; // <-- ADDED relative
+
+                const spacing = parseInt(spacingSelect.value);
+                let imageIndex = 0;
+
+                if (resizeMode === 'height') {
+                    // --- Columns-First (Adjust Individual Height) ---
+                    collageContainer.classList.add('split-container-h'); // Horizontal container
+                    let colElements = [];
+
+                    for (let j = 0; j < numCols; j++) {
+                        const colDiv = document.createElement('div');
+                        colDiv.className = 'split-container-v'; // Vertical container for cells
+                        colDiv.id = `col-${j}`;
+
+                        let cellElements = [];
+                        for (let i = 0; i < numRows; i++) {
+                            const image = uploadedImages[imageIndex % uploadedImages.length];
+                            imageIndex++;
+
+                            const slotElement = createCollageSlot(image);
+                            slotElement.id = `cell-${i}-${j}`;
+
+                            collageSlots.push({
+                                element: slotElement,
+                                imageId: image ? image.id : null,
+                                transform: { x: 0, y: 0, scale: 1 }
+                            });
+
+                            cellElements.push(slotElement);
+                            colDiv.appendChild(slotElement);
+                        }
+
+                        // Create vertical split for the cells in this column
+                        if (cellElements.length > 1) {
+                            const colSplit = Split(cellElements, {
+                                direction: 'vertical',
+                                sizes: Array(cellElements.length).fill(100 / cellElements.length),
+                                minSize: 50,
+                                gutterSize: spacing,
+                                gutter: createGutter
+                            });
+                            splitInstances.push(colSplit);
+                        } else if (cellElements.length === 1) {
+                            cellElements[0].style.height = '100%';
+                        }
+
+                        colElements.push(colDiv);
+                        collageContainer.appendChild(colDiv);
+                    }
+
+                    // Create horizontal split for the columns
+                    if (colElements.length > 1) {
+                        const rowSplit = Split(colElements, {
+                            direction: 'horizontal',
+                            sizes: Array(colElements.length).fill(100 / colElements.length),
+                            minSize: 50,
+                            gutterSize: spacing,
+                            gutter: createGutter
+                        });
+                        splitInstances.push(rowSplit);
+                    } else if (colElements.length === 1) {
+                        colElements[0].style.width = '100%';
+                    }
+
+                } else {
+                    // --- Rows-First (Adjust Individual Width) - DEFAULT ---
+                    collageContainer.classList.add('split-container-v'); // Vertical container
+                    let rowElements = [];
+
+                    for (let i = 0; i < numRows; i++) {
+                        const rowDiv = document.createElement('div');
+                        rowDiv.className = 'split-container-h'; // Horizontal container for cells
+                        rowDiv.id = `row-${i}`;
+
+                        let cellElements = [];
+                        for (let j = 0; j < numCols; j++) {
+                            const image = uploadedImages[imageIndex % uploadedImages.length];
+                            imageIndex++;
+
+                            const slotElement = createCollageSlot(image);
+                            slotElement.id = `cell-${i}-${j}`;
+
+                            collageSlots.push({
+                                element: slotElement,
+                                imageId: image ? image.id : null,
+                                transform: { x: 0, y: 0, scale: 1 }
+                            });
+
+                            cellElements.push(slotElement);
+                            rowDiv.appendChild(slotElement);
+                        }
+
+                        // Create horizontal split for the cells in this row
+                        if (cellElements.length > 1) {
+                            const rowSplit = Split(cellElements, {
+                                direction: 'horizontal',
+                                sizes: Array(cellElements.length).fill(100 / cellElements.length),
+                                minSize: 50,
+                                gutterSize: spacing,
+                                gutter: createGutter
+                            });
+                            splitInstances.push(rowSplit);
+                        } else if (cellElements.length === 1) {
+                            cellElements[0].style.width = '100%';
+                        }
+
+                        rowElements.push(rowDiv);
+                        collageContainer.appendChild(rowDiv);
+                    }
+
+                    // Create vertical split for the rows
+                    if (rowElements.length > 1) {
+                        const colSplit = Split(rowElements, {
+                            direction: 'vertical',
+                            sizes: Array(rowElements.length).fill(100 / rowElements.length),
+                            minSize: 50,
+                            gutterSize: spacing,
+                            gutter: createGutter
+                        });
+                        splitInstances.push(colSplit);
+                    } else if (rowElements.length === 1) {
+                        rowElements[0].style.height = '100%';
+                    }
+                }
+
+                // Nested timeout to apply styles, THEN add images
+                // This fixes the checkerboard/disappearing image bug
+                setTimeout(() => {
+                    updateAllSlotStyles();
+
+                    setTimeout(() => {
+                        collageSlots.forEach(slot => {
+                            const imageId = slot.imageId;
+                            if (imageId !== null && imageId !== undefined) { // <-- FIX for id:0
+                                const image = uploadedImages.find(img => img.id === imageId);
+                                if (image) {
+                                    addImageToSlot(slot.element, image, true); // Reset transform
+                                }
+                            }
+                        });
+                    }, 50); // 50ms for styles to apply
+                }, 0); // 0ms to let DOM update
+
+                showStep(3);
+                renderExtraImages();
+                if (isTextCreated) collageContainer.appendChild(textElement); // Re-add text
+            }
+
+            // Function for nested layouts (e.g., Main + 3)
+            function initializeNestedLayout(config) {
+                currentGridConfig = { type: 'nested', config: config };
+
+                splitInstances.forEach(split => split.destroy());
+                splitInstances = [];
+                collageSlots = [];
+                collageContainer.innerHTML = '';
+                // Ensure container is relative for text box
+                collageContainer.className = `w-full h-full relative ${config.mainDirection === 'horizontal' ? 'split-container-h' : 'split-container-v'}`; // <-- ADDED relative
+
+                const spacing = parseInt(spacingSelect.value);
+                let imageIndex = 0;
+
+                const mainPane = createCollageSlot(uploadedImages[imageIndex++]);
+                mainPane.id = 'main-pane';
+
+                const stackContainer = document.createElement('div');
+                stackContainer.className = `${config.stackDirection === 'horizontal' ? 'split-container-h' : 'split-container-v'}`;
+                stackContainer.id = 'stack-container';
+
+                if (config.main === 'left' || config.main === 'top') {
+                    collageContainer.appendChild(mainPane);
+                    collageContainer.appendChild(stackContainer);
+                } else {
+                    collageContainer.appendChild(stackContainer);
+                    collageContainer.appendChild(mainPane);
+                }
+
+                const stackSlots = [];
+                for (let i = 0; i < config.stackCount; i++) {
+                    const slot = createCollageSlot(uploadedImages[imageIndex++]);
+                    slot.id = `stack-slot-${i}`;
+                    stackContainer.appendChild(slot);
+                    stackSlots.push(slot);
+                }
+
+                collageSlots.push({ element: mainPane, imageId: uploadedImages[0]?.id, transform: { x: 0, y: 0, scale: 1 } });
+                stackSlots.forEach((slot, i) => {
+                    const imageId = uploadedImages[i + 1]?.id;
+                    collageSlots.push({ element: slot, imageId: imageId, transform: { x: 0, y: 0, scale: 1 } });
+                });
+
+                const mainSplitPanes = (config.main === 'left' || config.main === 'top') ? [mainPane, stackContainer] : [stackContainer, mainPane];
+                const mainSplitSizes = (config.main === 'left' || config.main === 'top') ? [config.mainSize, config.stackSize] : [config.stackSize, config.mainSize];
+
+                const mainSplit = Split(mainSplitPanes, {
+                    direction: config.mainDirection,
+                    sizes: mainSplitSizes,
+                    minSize: 50,
+                    gutterSize: spacing,
+                    gutter: createGutter
+                });
+                splitInstances.push(mainSplit);
+
+                const stackSplit = Split(stackSlots, {
+                    direction: config.stackDirection,
+                    sizes: Array(config.stackCount).fill(100 / config.stackCount),
+                    minSize: 50,
+                    gutterSize: spacing,
+                    gutter: createGutter
+                });
+                splitInstances.push(stackSplit);
+
+                // Nested timeout to apply styles, THEN add images
+                setTimeout(() => {
+                    updateAllSlotStyles();
+
+                    setTimeout(() => {
+                        collageSlots.forEach(slot => {
+                            const imageId = slot.imageId;
+                            if (imageId !== null && imageId !== undefined) { // <-- FIX for id:0
+                                const image = uploadedImages.find(img => img.id === imageId);
+                                if (image) {
+                                    addImageToSlot(slot.element, image, true);
+                                }
+                            }
+                        });
+                    }, 50);
+                }, 0);
+
+                showStep(3);
+                renderExtraImages();
+                if (isTextCreated) collageContainer.appendChild(textElement); // Re-add text
+            }
+
+            // Function for triple-pane layouts (e.g., 3 + Main + 3)
+            function initializeTripleLayout(config) {
+                currentGridConfig = { type: 'triple', config: config };
+
+                splitInstances.forEach(split => split.destroy());
+                splitInstances = [];
+                collageSlots = [];
+                collageContainer.innerHTML = '';
+                // Ensure container is relative for text box
+                collageContainer.className = `w-full h-full relative ${config.mainDirection === 'horizontal' ? 'split-container-h' : 'split-container-v'}`; // <-- ADDED relative
+
+                const spacing = parseInt(spacingSelect.value);
+                let imageIndex = 0;
+
+                // Create 3 main panes
+                const stackPane1 = document.createElement('div');
+                stackPane1.className = `${config.stackDirection === 'horizontal' ? 'split-container-h' : 'split-container-v'}`;
+                stackPane1.id = 'stack-pane-1';
+
+                const mainPane = createCollageSlot(uploadedImages[imageIndex++]);
+                mainPane.id = 'main-pane';
+
+                const stackPane2 = document.createElement('div');
+                stackPane2.className = `${config.stackDirection === 'horizontal' ? 'split-container-h' : 'split-container-v'}`;
+                stackPane2.id = 'stack-pane-2';
+
+                // Add main panes to container
+                collageContainer.appendChild(stackPane1);
+                collageContainer.appendChild(mainPane);
+                collageContainer.appendChild(stackPane2);
+
+                // Add main pane to state
+                collageSlots.push({ element: mainPane, imageId: uploadedImages[0]?.id, transform: { x: 0, y: 0, scale: 1 } });
+
+                // Create and add stack slots
+                const stackSlots1 = [];
+                for (let i = 0; i < config.stackCount; i++) {
+                    const slot = createCollageSlot(uploadedImages[imageIndex++]);
+                    slot.id = `stack1-slot-${i}`;
+                    stackPane1.appendChild(slot);
+                    stackSlots1.push(slot);
+                    // Find image for this slot
+                    const image = uploadedImages[imageIndex - 1];
+                    collageSlots.push({ element: slot, imageId: image ? image.id : null, transform: { x: 0, y: 0, scale: 1 } });
+                }
+
+                const stackSlots2 = [];
+                for (let i = 0; i < config.stackCount; i++) {
+                    const slot = createCollageSlot(uploadedImages[imageIndex++]);
+                    slot.id = `stack2-slot-${i}`;
+                    stackPane2.appendChild(slot);
+                    stackSlots2.push(slot);
+                    // Find image for this slot
+                    const image = uploadedImages[imageIndex - 1];
+                    collageSlots.push({ element: slot, imageId: image ? image.id : null, transform: { x: 0, y: 0, scale: 1 } });
+                }
+
+                // Apply splits (nested)
+                const mainSplit = Split([stackPane1, mainPane, stackPane2], {
+                    direction: config.mainDirection,
+                    sizes: [config.stackSize, config.mainSize, config.stackSize],
+                    minSize: 50,
+                    gutterSize: spacing,
+                    gutter: createGutter
+                });
+                splitInstances.push(mainSplit);
+
+                const stackSplit1 = Split(stackSlots1, {
+                    direction: config.stackDirection,
+                    sizes: Array(config.stackCount).fill(100 / config.stackCount),
+                    minSize: 50,
+                    gutterSize: spacing,
+                    gutter: createGutter
+                });
+                splitInstances.push(stackSplit1);
+
+                const stackSplit2 = Split(stackSlots2, {
+                    direction: config.stackDirection,
+                    sizes: Array(config.stackCount).fill(100 / config.stackCount),
+                    minSize: 50,
+                    gutterSize: spacing,
+                    gutter: createGutter
+                });
+                splitInstances.push(stackSplit2);
+
+                // Nested timeout to apply styles, THEN add images
+                setTimeout(() => {
+                    updateAllSlotStyles();
+
+                    setTimeout(() => {
+                        collageSlots.forEach(slot => {
+                            const imageId = slot.imageId;
+                            if (imageId !== null && imageId !== undefined) { // <-- FIX for id:0
+                                const image = uploadedImages.find(img => img.id === imageId);
+                                if (image) {
+                                    addImageToSlot(slot.element, image, true);
+                                }
+                            }
+                        });
+                    }, 50);
+                }, 0);
+
+                showStep(3);
+                renderExtraImages();
+                if (isTextCreated) collageContainer.appendChild(textElement); // Re-add text
+            }
+
+            // Function for large-center 3x3 layout
+            function initializeLargeCenterLayout() {
+                currentGridConfig = { type: 'large-center' };
+
+                splitInstances.forEach(split => split.destroy());
+                splitInstances = [];
+                collageSlots = [];
+                collageContainer.innerHTML = '';
+                // Ensure container is relative for text box
+                collageContainer.className = 'w-full h-full relative split-container-v';
+
+                const spacing = parseInt(spacingSelect.value);
+                let imageIndex = 0;
+
+                // Create 3 rows
+                const row1 = document.createElement('div');
+                row1.className = 'split-container-h';
+                row1.id = 'large-center-row-1';
+
+                const row2 = document.createElement('div');
+                row2.className = 'split-container-h';
+                row2.id = 'large-center-row-2';
+
+                const row3 = document.createElement('div');
+                row3.className = 'split-container-h';
+                row3.id = 'large-center-row-3';
+
+                // Add rows to container
+                collageContainer.appendChild(row1);
+                collageContainer.appendChild(row2);
+                collageContainer.appendChild(row3);
+
+                // Create slots for Row 1
+                const row1Slots = [];
+                for (let i = 0; i < 3; i++) {
+                    const slot = createCollageSlot(uploadedImages[imageIndex++]);
+                    slot.id = `lc-r1-s${i}`;
+                    row1.appendChild(slot);
+                    row1Slots.push(slot);
+                    const image = uploadedImages[imageIndex - 1];
+                    collageSlots.push({ element: slot, imageId: image ? image.id : null, transform: { x: 0, y: 0, scale: 1 } });
+                }
+
+                // Create slots for Row 2 (Middle row including the Large Center)
+                const row2Slots = [];
+                for (let i = 0; i < 3; i++) {
+                    const slot = createCollageSlot(uploadedImages[imageIndex++]);
+                    slot.id = `lc-r2-s${i}`;
+                    row2.appendChild(slot);
+                    row2Slots.push(slot);
+                    const image = uploadedImages[imageIndex - 1];
+                    collageSlots.push({ element: slot, imageId: image ? image.id : null, transform: { x: 0, y: 0, scale: 1 } });
+                }
+
+                // Create slots for Row 3
+                const row3Slots = [];
+                for (let i = 0; i < 3; i++) {
+                    const slot = createCollageSlot(uploadedImages[imageIndex++]);
+                    slot.id = `lc-r3-s${i}`;
+                    row3.appendChild(slot);
+                    row3Slots.push(slot);
+                    const image = uploadedImages[imageIndex - 1];
+                    collageSlots.push({ element: slot, imageId: image ? image.id : null, transform: { x: 0, y: 0, scale: 1 } });
+                }
+
+                // Apply splits (vertical layout for main container)
+                const mainSplit = Split([row1, row2, row3], {
+                    direction: 'vertical',
+                    sizes: [20, 60, 20], // Large center occupies 60% height
+                    minSize: 50,
+                    gutterSize: spacing,
+                    gutter: createGutter
+                });
+                splitInstances.push(mainSplit);
+
+                // Apply splits for each row (horizontal splits)
+                const row1Split = Split(row1Slots, {
+                    direction: 'horizontal',
+                    sizes: [20, 60, 20], // Wider center area
+                    minSize: 50,
+                    gutterSize: spacing,
+                    gutter: createGutter
+                });
+                splitInstances.push(row1Split);
+
+                const row2Split = Split(row2Slots, {
+                    direction: 'horizontal',
+                    sizes: [20, 60, 20], // Wider center area
+                    minSize: 50,
+                    gutterSize: spacing,
+                    gutter: createGutter
+                });
+                splitInstances.push(row2Split);
+
+                const row3Split = Split(row3Slots, {
+                    direction: 'horizontal',
+                    sizes: [20, 60, 20], // Wider center area
+                    minSize: 50,
+                    gutterSize: spacing,
+                    gutter: createGutter
+                });
+                splitInstances.push(row3Split);
+
+                // Nested timeout to apply styles, THEN add images
+                setTimeout(() => {
+                    updateAllSlotStyles();
+
+                    setTimeout(() => {
+                        collageSlots.forEach(slot => {
+                            const imageId = slot.imageId;
+                            if (imageId !== null && imageId !== undefined) {
+                                const image = uploadedImages.find(img => img.id === imageId);
+                                if (image) {
+                                    addImageToSlot(slot.element, image, true);
+                                }
+                            }
+                        });
+                    }, 50);
+                }, 0);
+
+                showStep(3);
+                renderExtraImages();
+                if (isTextCreated) collageContainer.appendChild(textElement); // Re-add text
+            }
+
+
+            // Create a single slot element
+            function createCollageSlot(image) {
+                const slotDiv = document.createElement('div');
+                slotDiv.className = 'collage-slot';
+
+                // Add controls
+                slotDiv.innerHTML = `
+                    <div class="slot-controls">
+                        <button title="Zoom In" class="zoom-in">+</button>
+                        <button title="Zoom Out" class="zoom-out">-</button>
+                        <button title="Change Image" class="change-img">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <button title="Remove Image" class="remove-img">&times;</button>
+                    </div>
+                    <div class="image-clipper">
+                        <span class="placeholder-text text-gray-500 text-sm">Empty Slot</span>
+                    </div>
+                `;
+
+                slotDiv.draggable = true; // Make the slot draggable
+
+                // Add event listeners for slot controls
+                slotDiv.querySelector('.zoom-in').addEventListener('click', (e) => zoomSlot(slotDiv, 1.1));
+                slotDiv.querySelector('.zoom-out').addEventListener('click', (e) => zoomSlot(slotDiv, 0.9));
+                slotDiv.querySelector('.remove-img').addEventListener('click', (e) => removeImageFromSlot(slotDiv));
+                slotDiv.querySelector('.change-img').addEventListener('click', (e) => triggerImageChange(slotDiv));
+
+                // Panning listeners
+                slotDiv.addEventListener('mousedown', (e) => startPan(e, slotDiv));
+                slotDiv.addEventListener('touchstart', (e) => startPan(e, slotDiv), { passive: false });
+
+                // Drag and drop listeners for swapping
+                slotDiv.addEventListener('dragstart', (e) => {
+                    isPanning = false; // It's a drag, not a pan.
+                    const slotState = getSlotState(slotDiv);
+                    if (slotState?.imageId === null || slotState?.imageId === undefined) {
+                        e.preventDefault();
+                        return;
+                    }
+                    e.stopPropagation();
+                    draggedSlot = slotDiv;
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', 'dummy'); // for firefox
+                });
+
+                slotDiv.addEventListener('dragend', (e) => {
+                    if (draggedSlot) {
+                        document.querySelectorAll('.collage-slot').forEach(s => s.classList.remove('bg-blue-200'));
+                    }
+                    draggedSlot = null;
+                });
+
+                slotDiv.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    if (draggedSlot && draggedSlot !== slotDiv) {
+                        slotDiv.classList.add('bg-blue-200');
+                    }
+                });
+                slotDiv.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    slotDiv.classList.remove('bg-blue-200');
+                });
+
+                slotDiv.addEventListener('drop', (e) => {
+                    slotDiv.classList.remove('bg-blue-200');
+                    onDropImage(e, slotDiv);
+                });
+
+                // Click to select listener
+                slotDiv.addEventListener('click', (e) => {
+                    if (slotDiv.dataset.isPanning === 'true') return;
+                    if (e.target.closest('.slot-controls')) return;
+                    selectSlot(slotDiv);
+                });
+
+                return slotDiv;
+            }
+
+            // --- End V2 Grid Functions ---
+
+
+            // Add an image to a slot
+            function addImageToSlot(slotElement, image, resetTransform = true) {
+                if (!image) return;
+
+                const clipper = slotElement.querySelector('.image-clipper');
+                if (!clipper) return;
+
+                const existingImg = clipper.querySelector('img');
+                if (existingImg) existingImg.remove();
+
+                const img = document.createElement('img');
+                img.src = image.url;
+                img.draggable = false; // Prevent the image itself from being dragged
+
+                img.onload = () => {
+                    const slotRect = clipper.getBoundingClientRect();
+                    // Handle case where slotRect has no dimensions yet
+                    if (slotRect.width === 0 || slotRect.height === 0) {
+                        img.style.width = '100%';
+                        img.style.height = 'auto';
+                        if (resetTransform) {
+                            img.style.transform = 'translate(0px, 0px) scale(1)';
+                        } else {
+                            applyTransform(slotElement);
+                        }
+                        return;
+                    }
+
+                    const slotRatio = slotRect.width / slotRect.height;
+                    const imgRatio = img.naturalWidth / img.naturalHeight;
+
+                    if (imgRatio > slotRatio) {
+                        img.style.height = '100%';
+                        img.style.width = 'auto';
+                    } else {
+                        img.style.width = '100%';
+                        img.style.height = 'auto';
+                    }
+
+                    if (resetTransform) {
+                        img.style.transform = 'translate(0px, 0px) scale(1)';
+                    } else {
+                        applyTransform(slotElement);
+                    }
+                };
+
+                clipper.prepend(img); // Prepend to be behind controls
+                const placeholder = clipper.querySelector('.placeholder-text');
+                if (placeholder) placeholder.style.display = 'none';
+
+                // Update state
+                const slotState = collageSlots.find(s => s.element === slotElement);
+                if (slotState) {
+                    slotState.imageId = image.id;
+                    if (resetTransform) {
+                        slotState.transform = { x: 0, y: 0, scale: 1 };
+                    }
+                }
+            }
+
+            // Select a slot for click-replacement
+            function selectSlot(slotElement) {
+                if (selectedSlot) {
+                    selectedSlot.classList.remove('selected');
+                }
+                if (selectedSlot === slotElement) {
+                    selectedSlot = null;
+                } else {
+                    selectedSlot = slotElement;
+                    selectedSlot.classList.add('selected');
+                }
+            }
+
+            // Remove image from a slot
+            function removeImageFromSlot(slotElement) {
+                const clipper = slotElement.querySelector('.image-clipper');
+                const img = clipper.querySelector('img');
+                if (img) img.remove();
+
+                const placeholder = clipper.querySelector('.placeholder-text');
+                if (placeholder) placeholder.style.display = 'block';
+
+                // Update state
+                const slotState = collageSlots.find(s => s.element === slotElement);
+                if (slotState) {
+                    slotState.imageId = null;
+                    slotState.transform = { x: 0, y: 0, scale: 1 };
+                }
+            }
+
+            // Trigger hidden file input to change a single image
+            function triggerImageChange(slotElement) {
+                activeSlot = slotElement; // Remember which slot to update
+                imageChangeInput.click();
+            }
+
+            // Handle the single image change
+            function handleImageChange(e) {
+                const file = e.target.files[0];
+                if (!file || !activeSlot) return;
+
+                const id = nextImageId++;
+                const newImage = {
+                    id: id,
+                    file: file,
+                    url: URL.createObjectURL(file)
+                };
+
+                uploadedImages.push(newImage); // Add to main list
+                addImageToSlot(activeSlot, newImage, true);
+                renderExtraImages();
+
+                activeSlot = null;
+                imageChangeInput.value = null; // Clear input
+            }
+
+            // Render the bottom bar of uploaded images
+            function renderExtraImages() {
+                // Clear all but the "+" button
+                while (extraImagesContainer.firstChild && extraImagesContainer.firstChild !== addMoreImagesBtn) {
+                    extraImagesContainer.removeChild(extraImagesContainer.firstChild);
+                }
+
+                uploadedImages.forEach(image => {
+                    const img = document.createElement('img');
+                    img.src = image.url;
+                    img.className = 'w-16 h-16 object-cover rounded-md shadow cursor-grab active:cursor-grabbing cursor-pointer'; // Added cursor-pointer
+                    img.draggable = true;
+                    img.dataset.id = image.id;
+
+                    img.addEventListener('dragstart', (e) => {
+                        dragImageId = image.id;
+                        draggedSlot = null; // Ensure we're not in slot-swap mode
+                        e.dataTransfer.effectAllowed = 'copy';
+                    });
+
+                    // Add click listener for click-to-replace
+                    img.addEventListener('click', (e) => {
+                        if (selectedSlot) {
+                            const imageId = parseInt(e.target.dataset.id);
+                            const image = uploadedImages.find(img => img.id === imageId);
+                            if (image) {
+                                addImageToSlot(selectedSlot, image, true);
+                                selectSlot(selectedSlot);
+                            }
+                        }
+                    });
+
+                    extraImagesContainer.insertBefore(img, addMoreImagesBtn);
+                });
+            }
+
+            // Handle dropping an image onto a slot
+            function onDropImage(e, slotElement) {
+                e.preventDefault();
+                e.stopPropagation(); // Prevent event from bubbling up
+
+                // Case 1: Drag from the bottom image bar
+                if (dragImageId !== null) {
+                    const image = uploadedImages.find(img => img.id === parseInt(dragImageId));
+                    if (image) {
+                        addImageToSlot(slotElement, image, true); // Add new image, reset transform
+                    }
+                }
+                // Case 2: Drag from another slot (swap)
+                else if (draggedSlot && draggedSlot !== slotElement) {
+                    const sourceSlotState = getSlotState(draggedSlot);
+                    const targetSlotState = getSlotState(slotElement);
+
+                    if (sourceSlotState && targetSlotState) {
+                        // Swap imageId and transform properties
+                        const tempImageId = sourceSlotState.imageId;
+                        const tempTransform = { ...sourceSlotState.transform };
+
+                        sourceSlotState.imageId = targetSlotState.imageId;
+                        sourceSlotState.transform = { ...targetSlotState.transform };
+
+                        targetSlotState.imageId = tempImageId;
+                        targetSlotState.transform = tempTransform;
+
+                        // Get the image objects
+                        const sourceImage = uploadedImages.find(img => img.id === sourceSlotState.imageId);
+                        const targetImage = uploadedImages.find(img => img.id === targetSlotState.imageId);
+
+                        // Re-render the source slot (where the drag started)
+                        if (sourceImage) {
+                            addImageToSlot(draggedSlot, sourceImage, false); // Don't reset transform
+                            applyTransform(draggedSlot);
+                        } else {
+                            removeImageFromSlot(draggedSlot);
+                        }
+
+                        // Re-render the target slot (where it was dropped)
+                        if (targetImage) {
+                            addImageToSlot(slotElement, targetImage, false); // Don't reset transform
+                            applyTransform(slotElement);
+                        } else {
+                            removeImageFromSlot(slotElement);
+                        }
+                    }
+                }
+
+                // Clean up
+                dragImageId = null;
+                draggedSlot = null;
+            }
+
+            // --- Panning and Zooming Logic ---
+
+            function getSlotState(slotElement) {
+                return collageSlots.find(s => s.element === slotElement);
+            }
+
+            function applyTransform(slotElement) {
+                const img = slotElement.querySelector('img');
+                const state = getSlotState(slotElement);
+                if (img && state) {
+                    const { x, y, scale } = state.transform;
+                    img.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+                }
+            }
+
+            function startPan(e, slotElement) {
+                if (e.target.closest('.slot-controls')) return;
+
+                const img = slotElement.querySelector('img');
+                if (!img) return;
+
+                // e.preventDefault(); // REMOVED to allow drag and drop to start
+
+                activeSlot = slotElement;
+                isPanning = false;
+                slotElement.dataset.isPanning = 'false';
+                const state = getSlotState(slotElement);
+
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                panStart.x = clientX - state.transform.x;
+                panStart.y = clientY - state.transform.y;
+                panStart.mouseX = clientX;
+                panStart.mouseY = clientY;
+
+                activeSlot.classList.add('active');
+            }
+
+            function onPan(e) {
+                if (!activeSlot || draggedSlot) return;
+
+                e.preventDefault();
+                const state = getSlotState(activeSlot);
+
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                if (!isPanning) {
+                    const moveDist = Math.hypot(clientX - panStart.mouseX, clientY - panStart.mouseY);
+                    if (moveDist > 5) {
+                        isPanning = true;
+                        activeSlot.dataset.isPanning = 'true';
+                    } else {
+                        return; // Not a pan yet
+                    }
+                }
+
+                let newX = clientX - panStart.x;
+                let newY = clientY - panStart.y;
+
+                const img = activeSlot.querySelector('img');
+                const imgRect = img.getBoundingClientRect();
+                const slotRect = activeSlot.querySelector('.image-clipper').getBoundingClientRect();
+
+                const widthDiff = (imgRect.width - slotRect.width);
+                const heightDiff = (imgRect.height - slotRect.height);
+
+                const minX = -(widthDiff / 2);
+                const maxX = (widthDiff / 2);
+                const minY = -(heightDiff / 2);
+                const maxY = (heightDiff / 2);
+
+                if (newX < minX) newX = minX;
+                if (newX > maxX) newX = maxX;
+                if (newY < minY) newY = minY;
+                if (newY > maxY) newY = maxY;
+
+                if (imgRect.width <= slotRect.width) newX = 0;
+                if (imgRect.height <= slotRect.height) newY = 0;
+
+                state.transform.x = newX;
+                state.transform.y = newY;
+
+                applyTransform(activeSlot);
+            }
+
+            function endPan(e) {
+                if (isPanning) {
+                    isPanning = false;
+                }
+                if (activeSlot) {
+                    activeSlot.classList.remove('active');
+                }
+                activeSlot = null;
+            }
+
+            function zoomSlot(slotElement, factor) {
+                const state = getSlotState(slotElement);
+                if (!state) return;
+
+                const newScale = state.transform.scale * factor;
+                state.transform.scale = Math.max(0.5, Math.min(newScale, 5));
+
+                if (state.transform.scale === 1) {
+                    state.transform.x = 0;
+                    state.transform.y = 0;
+                }
+
+                applyTransform(slotElement);
+            }
+
+            // Mouse wheel zoom
+            function onWheel(e) {
+                const slotElement = e.target.closest('.collage-slot');
+                if (!slotElement) return;
+
+                e.preventDefault();
+                const factor = e.deltaY < 0 ? 1.1 : 0.9; // Zoom in or out
+                zoomSlot(slotElement, factor);
+            }
+
+            // --- Control Panel Listeners ---
+
+            function updateAspectRatio() {
+                collageWrapper.style.aspectRatio = aspectRatioSelect.value;
+            }
+
+            // Update all styling for slots and gutters
+            function updateAllSlotStyles() {
+                const spacing = parseInt(spacingSelect.value);
+                const radius = parseInt(cornerRadiusSelect.value);
+                const color = borderColorInput.value;
+
+                const isStyled = spacing > 0 || radius > 0;
+                const bgColor = isStyled ? color : '#FFFFFF';
+
+                // Update main container background
+                collageContainer.style.backgroundColor = bgColor;
+
+                // Update gutters
+                document.querySelectorAll('.gutter').forEach(gutter => {
+                    gutter.style.backgroundColor = bgColor;
+                    // When spacing is used as a border, hide the drag handle dots.
+                    if (spacing > 0) {
+                        gutter.style.backgroundImage = 'none';
+                    }
+                });
+
+                // Update slots (padding) and clippers (radius)
+                document.querySelectorAll('.collage-slot').forEach(slot => {
+                    slot.style.padding = `${spacing}px`;
+
+                    if (isStyled) {
+                        slot.style.backgroundColor = bgColor;
+                        slot.style.backgroundImage = 'none'; // <-- FIX: Hide checkerboard
+                    } else {
+                        slot.style.backgroundColor = ''; // Revert to CSS default
+                        slot.style.backgroundImage = ''; // Revert to CSS default
+                    }
+
+                    const clipper = slot.querySelector('.image-clipper');
+                    if (clipper) {
+                        clipper.style.borderRadius = `${radius}px`;
+                    }
+                });
+            }
+
+            // --- Project Load/Save State ---
+            function fileToBase64(blob) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            async function exportProjectState() {
+                loadingModal.querySelector('p').innerText = "Saving project...";
+                loadingModal.classList.remove('hidden');
+                try {
+                    const imagesBase64 = await Promise.all(uploadedImages.map(async (img) => {
+                        let base64 = img.base64 || "";
+                        if (!base64) {
+                            if (img.file) {
+                                base64 = await fileToBase64(img.file);
+                            } else {
+                                const response = await fetch(img.url);
+                                const blob = await response.blob();
+                                base64 = await fileToBase64(blob);
+                            }
+                            img.base64 = base64; // cache it
+                        }
+                        return { id: img.id, base64: base64 };
+                    }));
+
+                    const projectState = {
+                        version: "6.0",
+                        images: imagesBase64,
+                        slots: collageSlots.map(slot => ({
+                            id: slot.element.id,
+                            imageId: slot.imageId,
+                            transform: slot.transform
+                        })),
+                        splits: splitInstances.map(split => split.getSizes()),
+                        gridConfig: currentGridConfig,
+                        textState: textState,
+                        isTextCreated: isTextCreated,
+                        styles: {
+                            spacing: spacingSelect.value,
+                            cornerRadius: cornerRadiusSelect.value,
+                            borderColor: borderColorInput.value,
+                            aspectRatio: aspectRatioSelect.value,
+                            resizeMode: resizeModeSelect.value
+                        },
+                        nextImageId: nextImageId
+                    };
+
+                    const jsonString = JSON.stringify(projectState);
+                    const uint8Array = fflate.strToU8(jsonString);
+                    const compressed = fflate.gzipSync(uint8Array, { level: 6 });
+                    
+                    const blob = new Blob([compressed], { type: 'application/octet-stream' });
+                    
+                    if (window.showSaveFilePicker) {
+                        try {
+                            const handle = await window.showSaveFilePicker({
+                                suggestedName: 'my_project.collage',
+                                types: [{
+                                    description: 'Collage Project File',
+                                    accept: { 'application/octet-stream': ['.collage'] },
+                                }],
+                            });
+                            const writable = await handle.createWritable();
+                            await writable.write(blob);
+                            await writable.close();
+                        } catch (err) {
+                            if (err.name !== 'AbortError') {
+                                console.error('Save failed', err);
+                                throw err;
+                            }
+                        }
+                    } else {
+                        // Fallback for browsers without File System Access API
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'my_project.collage';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }
+                } catch (e) {
+                    console.error("Error saving project", e);
+                    alert("Failed to save project.");
+                } finally {
+                    loadingModal.classList.add('hidden');
+                    loadingModal.querySelector('p').innerText = "Exporting your collage..."; // Reset to original
+                }
+            }
+
+            function loadProject(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                if (uploadedImages.length > 0) {
+                    if (!confirm("You already have a project in progress. Loading a new project will overwrite your current progress and discard unsaved changes. Do you want to continue?")) {
+                        e.target.value = ''; // Reset input
+                        return;
+                    }
+                }
+
+                loadingModal.querySelector('p').innerText = "Loading project...";
+                loadingModal.classList.remove('hidden');
+
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const arrayBuffer = event.target.result;
+                        const uint8Array = new Uint8Array(arrayBuffer);
+                        const decompressed = fflate.gunzipSync(uint8Array);
+                        const jsonString = fflate.strFromU8(decompressed);
+                        const projectState = JSON.parse(jsonString);
+
+                        if (projectState.version !== "6.0") {
+                            console.warn("Loading a project from a different version.");
+                        }
+                        await restoreProjectState(projectState);
+                        
+                    } catch (error) {
+                        console.error("Error loading project", error);
+                        alert("Invalid or corrupt collage project file.");
+                    } finally {
+                        loadingModal.classList.add('hidden');
+                        loadingModal.querySelector('p').innerText = "Exporting your collage...";
+                        e.target.value = ''; // Reset input so same file can be loaded again
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            async function restoreProjectState(state) {
+                // 1. Reset current state
+                uploadedImages = [];
+                collageSlots = [];
+                splitInstances.forEach(s => s.destroy());
+                splitInstances = [];
+                collageContainer.innerHTML = '';
+                if (textElement) {
+                    textElement.remove();
+                    textElement = null;
+                }
+                activeSlot = null;
+                selectedSlot = null;
+                draggedSlot = null;
+                dragImageId = null;
+
+                nextImageId = state.nextImageId || 0;
+                currentGridConfig = state.gridConfig;
+                textState = state.textState;
+                isTextCreated = false; // Prevent grid initializers from synchronously appending a null textElement
+
+                // 2. Load images into memory
+                uploadedImages = await Promise.all(state.images.map(async (img) => {
+                    const res = await fetch(img.base64);
+                    const blob = await res.blob();
+                    return {
+                        id: img.id,
+                        file: null,
+                        url: URL.createObjectURL(blob),
+                        base64: img.base64 // Cache it
+                    };
+                }));
+
+                // 3. Restore UI Settings
+                if (state.styles) {
+                    spacingSelect.value = state.styles.spacing;
+                    cornerRadiusSelect.value = state.styles.cornerRadius;
+                    borderColorInput.value = state.styles.borderColor;
+                    aspectRatioSelect.value = state.styles.aspectRatio;
+                    resizeModeSelect.value = state.styles.resizeMode;
+                    resizeModeEditorSelect.value = state.styles.resizeMode;
+                    updateAspectRatio();
+                }
+
+                // 4. Rebuild Grid & Apply State Data
+                if (currentGridConfig) {
+                    switch (currentGridConfig.type) {
+                        case 'grid':
+                            initializeGrid(currentGridConfig.rows, currentGridConfig.cols);
+                            break;
+                        case 'nested':
+                            initializeNestedLayout(currentGridConfig.config);
+                            break;
+                        case 'triple':
+                            initializeTripleLayout(currentGridConfig.config);
+                            break;
+                        case 'large-center':
+                            initializeLargeCenterLayout();
+                            break;
+                    }
+
+                    setTimeout(() => {
+                        if (state.splits && state.splits.length === splitInstances.length) {
+                            splitInstances.forEach((split, index) => {
+                                split.setSizes(state.splits[index]);
+                            });
+                        }
+                        state.slots.forEach((savedSlot, index) => {
+                            const slotState = collageSlots[index];
+                            if (slotState) {
+                                const domSlot = slotState.element;
+                                slotState.imageId = savedSlot.imageId;
+                                slotState.transform = savedSlot.transform;
+                                
+                                const imageObj = savedSlot.imageId != null ? uploadedImages.find(img => img.id === savedSlot.imageId) : null;
+                                
+                                if (imageObj) {
+                                    addImageToSlot(domSlot, imageObj, false);
+                                } else {
+                                    const existingImg = domSlot.querySelector('.image-clipper img');
+                                    if (existingImg) existingImg.remove();
+                                    const placeholder = domSlot.querySelector('.placeholder-text');
+                                    if (placeholder) placeholder.style.display = 'block';
+                                }
+                            }
+                        });
+                        updateAllSlotStyles();
+                    }, 100);
+                }
+
+                // 5. Text Overlay
+                isTextCreated = state.isTextCreated;
+                if (isTextCreated) {
+                    createTextElement();
+                    updateTextElement();
+                }
+
+                renderImagePreviews(); // Step 1 previews
+                renderExtraImages();   // Step 3 thumbnail bar
+                showStep(3);
+            }
+
+            // Export collage as JPG or PNG
+            function exportCollage() {
+                loadingModal.classList.remove('hidden');
+
+                // Deselect active elements
+                if (activeSlot) activeSlot.classList.remove('active');
+                if (selectedSlot) selectedSlot.classList.remove('selected');
+                if (textElement) textElement.classList.remove('active');
+
+                const collage = document.getElementById('collage-container');
+                const type = fileTypeSelect.value;
+                const mimeType = type === 'png' ? 'image/png' : 'image/jpeg';
+                const quality = type === 'png' ? 1.0 : 0.9;
+
+                html2canvas(collage, {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: collageContainer.style.backgroundColor || '#FFFFFF',
+                    onclone: (doc) => {
+                        // Ensure all controls are hidden in the clone
+                        doc.querySelectorAll('.slot-controls, .resize-handle').forEach(el => el.style.display = 'none');
+                        doc.querySelectorAll('.text-overlay').forEach(el => el.style.border = 'none');
+                        doc.querySelectorAll('.collage-slot').forEach(slot => {
+                            if (slot.querySelector('img')) {
+                                const placeholder = slot.querySelector('.placeholder-text');
+                                if (placeholder) placeholder.style.display = 'none';
+                            }
+                        });
+                    }
+                }).then(canvas => {
+                    canvas.toBlob(blob => {
+                        const a = document.createElement('a');
+                        const url = URL.createObjectURL(blob);
+                        a.href = url;
+                        a.download = `collage.${type}`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        loadingModal.classList.add('hidden');
+                    }, mimeType, quality);
+
+                }).catch(err => {
+                    console.error('Error exporting collage:', err);
+                    loadingModal.classList.add('hidden');
+                });
+            }
+
+            // --- Text Overlay Functions ---
+
+            function createTextElement() {
+                if (textElement) return; // Only one!
+
+                textElement = document.createElement('div');
+                textElement.className = 'text-overlay';
+                textElement.id = 'text-overlay-1';
+
+                textElement.innerHTML = `
+                    <p id="text-overlay-p"></p>
+                    <div class="resize-handle resize-handle-nw"></div>
+                    <div class="resize-handle resize-handle-ne"></div>
+                    <div class="resize-handle resize-handle-sw"></div>
+                    <div class="resize-handle resize-handle-se"></div>
+                `;
+
+                collageContainer.appendChild(textElement);
+                isTextCreated = true;
+
+                // Add drag/resize listeners
+                textElement.addEventListener('mousedown', startTextDrag);
+                textElement.addEventListener('touchstart', startTextDrag, { passive: false });
+
+                textElement.querySelector('.resize-handle-se').addEventListener('mousedown', (e) => startTextResize(e, 'se'));
+                textElement.querySelector('.resize-handle-sw').addEventListener('mousedown', (e) => startTextResize(e, 'sw'));
+                textElement.querySelector('.resize-handle-ne').addEventListener('mousedown', (e) => startTextResize(e, 'ne'));
+                textElement.querySelector('.resize-handle-nw').addEventListener('mousedown', (e) => startTextResize(e, 'nw'));
+
+                textElement.querySelector('.resize-handle-se').addEventListener('touchstart', (e) => startTextResize(e, 'se'), { passive: false });
+                textElement.querySelector('.resize-handle-sw').addEventListener('touchstart', (e) => startTextResize(e, 'sw'), { passive: false });
+                textElement.querySelector('.resize-handle-ne').addEventListener('touchstart', (e) => startTextResize(e, 'ne'), { passive: false });
+                textElement.querySelector('.resize-handle-nw').addEventListener('touchstart', (e) => startTextResize(e, 'nw'), { passive: false });
+            }
+
+            function updateTextElement() {
+                if (!textElement) return;
+
+                const p = textElement.querySelector('p');
+                p.innerText = textState.content;
+                p.style.fontFamily = `'${textState.font}', sans-serif`;
+                p.style.fontSize = `${textState.fontSize}px`;
+                p.style.color = textState.color;
+                p.style.fontWeight = textState.isBold ? 'bold' : 'normal';
+                p.style.textDecoration = textState.isUnderlined ? 'underline' : 'none';
+
+                if (textState.bgToggle === 'opaque') {
+                    textElement.style.backgroundColor = textState.bgColor;
+                } else {
+                    textElement.style.backgroundColor = 'transparent';
+                }
+
+                textElement.style.left = `${textState.pos.x}px`;
+                textElement.style.top = `${textState.pos.y}px`;
+                textElement.style.width = `${textState.dimensions.w}px`;
+                textElement.style.height = `${textState.dimensions.h}px`;
+            }
+
+            function openTextModal() {
+                textInput.value = textState.content;
+                textFontSelect.value = textState.font;
+                textSizeInput.value = textState.fontSize;
+                textColorInput.value = textState.color;
+                textBgToggle.value = textState.bgToggle;
+                textBgColorInput.value = textState.bgColor;
+                textBgColorInput.disabled = textState.bgToggle === 'transparent';
+
+                textBoldBtn.setAttribute('data-active', textState.isBold);
+                textBoldBtn.classList.toggle('bg-blue-200', textState.isBold);
+                textUnderlineBtn.setAttribute('data-active', textState.isUnderlined);
+                textUnderlineBtn.classList.toggle('bg-blue-200', textState.isUnderlined);
+
+                textModal.classList.remove('hidden');
+            }
+
+            function closeTextModal() {
+                textModal.classList.add('hidden');
+            }
+
+            function saveTextState() {
+                // Create element if it's the first time
+                if (!isTextCreated) {
+                    createTextElement();
+                }
+
+                textState.content = textInput.value;
+                textState.font = textFontSelect.value;
+                textState.fontSize = parseInt(textSizeInput.value);
+                textState.color = textColorInput.value;
+                textState.bgToggle = textBgToggle.value;
+                textState.bgColor = textBgColorInput.value;
+                textState.isBold = textBoldBtn.getAttribute('data-active') === 'true';
+                textState.isUnderlined = textUnderlineBtn.getAttribute('data-active') === 'true';
+
+                updateTextElement();
+                closeTextModal();
+            }
+
+            function deleteText() {
+                if (textElement) {
+                    textElement.remove();
+                    textElement = null;
+                }
+                isTextCreated = false;
+                // Reset to defaults
+                textState = {
+                    content: "Your Text Here",
+                    font: "Inter",
+                    fontSize: 24,
+                    color: "#000000",
+                    isBold: false,
+                    isUnderlined: false,
+                    bgToggle: "transparent",
+                    bgColor: "#FFFFFF",
+                    pos: { x: 10, y: 10 },
+                    dimensions: { w: 200, h: 100 }
+                };
+                closeTextModal();
+            }
+
+            // --- Text Drag & Resize Logic ---
+            function startTextDrag(e) {
+                if (e.target.classList.contains('resize-handle')) return;
+
+                e.preventDefault();
+                isTextDragging = true;
+                textElement.classList.add('active');
+
+                const rect = collageContainer.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                textDragStart.x = clientX - rect.left;
+                textDragStart.y = clientY - rect.top;
+                textDragStart.elX = textState.pos.x;
+                textDragStart.elY = textState.pos.y;
+
+                document.addEventListener('mousemove', onTextDrag);
+                document.addEventListener('mouseup', endTextDrag);
+                document.addEventListener('touchmove', onTextDrag, { passive: false });
+                document.addEventListener('touchend', endTextDrag);
+            }
+
+            function onTextDrag(e) {
+                if (!isTextDragging) return;
+
+                e.preventDefault();
+
+                const rect = collageContainer.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                let currentX = clientX - rect.left;
+                let currentY = clientY - rect.top;
+
+                let newX = textDragStart.elX + (currentX - textDragStart.x);
+                let newY = textDragStart.elY + (currentY - textDragStart.y);
+
+                // Clamp to container
+                newX = Math.max(0, Math.min(newX, rect.width - textState.dimensions.w));
+                newY = Math.max(0, Math.min(newY, rect.height - textState.dimensions.h));
+
+                textState.pos.x = newX;
+                textState.pos.y = newY;
+
+                textElement.style.left = `${newX}px`;
+                textElement.style.top = `${newY}px`;
+            }
+
+            function endTextDrag(e) {
+                if (!isTextDragging) return;
+
+                isTextDragging = false;
+                textElement.classList.remove('active');
+                document.removeEventListener('mousemove', onTextDrag);
+                document.removeEventListener('mouseup', endTextDrag);
+                document.removeEventListener('touchmove', onTextDrag);
+                document.removeEventListener('touchend', endTextDrag);
+            }
+
+            function startTextResize(e, corner) {
+                e.preventDefault();
+                isTextResizing = true;
+                textResizeStart.corner = corner;
+
+                const rect = collageContainer.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                textResizeStart.x = clientX - rect.left;
+                textResizeStart.y = clientY - rect.top;
+                textResizeStart.elX = textState.pos.x;
+                textResizeStart.elY = textState.pos.y;
+                textResizeStart.elW = textState.dimensions.w;
+                textResizeStart.elH = textState.dimensions.h;
+
+                document.addEventListener('mousemove', onTextResize);
+                document.addEventListener('mouseup', endTextResize);
+                document.addEventListener('touchmove', onTextResize, { passive: false });
+                document.addEventListener('touchend', endTextResize);
+            }
+
+            function onTextResize(e) {
+                if (!isTextResizing) return;
+
+                e.preventDefault();
+
+                const rect = collageContainer.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                let currentX = clientX - rect.left;
+                let currentY = clientY - rect.top;
+
+                let newX = textState.pos.x;
+                let newY = textState.pos.y;
+                let newW = textState.dimensions.w;
+                let newH = textState.dimensions.h;
+
+                const deltaX = currentX - textResizeStart.x;
+                const deltaY = currentY - textResizeStart.y;
+
+                if (textResizeStart.corner.includes('e')) {
+                    newW = textResizeStart.elW + deltaX;
+                }
+                if (textResizeStart.corner.includes('w')) {
+                    newW = textResizeStart.elW - deltaX;
+                    newX = textResizeStart.elX + deltaX;
+                }
+                if (textResizeStart.corner.includes('s')) {
+                    newH = textResizeStart.elH + deltaY;
+                }
+                if (textResizeStart.corner.includes('n')) {
+                    newH = textResizeStart.elH - deltaY;
+                    newY = textResizeStart.elY + deltaY;
+                }
+
+                // Min size
+                if (newW < 50) {
+                    newW = 50;
+                    if (textResizeStart.corner.includes('w')) newX = textResizeStart.elX + textResizeStart.elW - 50;
+                }
+                if (newH < 30) {
+                    newH = 30;
+                    if (textResizeStart.corner.includes('n')) newY = textResizeStart.elY + textResizeStart.elH - 30;
+                }
+
+                // Clamp to container
+                if (newX < 0) { newW += newX; newX = 0; }
+                if (newY < 0) { newH += newY; newY = 0; }
+                if (newX + newW > rect.width) { newW = rect.width - newX; }
+                if (newY + newH > rect.height) { newH = rect.height - newY; }
+
+                textState.pos.x = newX;
+                textState.pos.y = newY;
+                textState.dimensions.w = newW;
+                textState.dimensions.h = newH;
+
+                textElement.style.left = `${newX}px`;
+                textElement.style.top = `${newY}px`;
+                textElement.style.width = `${newW}px`;
+                textElement.style.height = `${newH}px`;
+            }
+
+            function endTextResize(e) {
+                isTextResizing = false;
+                document.removeEventListener('mousemove', onTextResize);
+                document.removeEventListener('mouseup', endTextResize);
+                document.removeEventListener('touchmove', onTextResize);
+                document.removeEventListener('touchend', endTextResize);
+            }
+
+
+            // --- INITIALIZATION ---
+            imageUploadInput.addEventListener('change', handleImageUpload);
+            imageChangeInput.addEventListener('change', handleImageChange);
+            addMoreImagesBtn.addEventListener('click', () => imageUploadInput.click());
+
+            imagePreviewContainer.addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-btn')) {
+                    removeImage(e.target.dataset.id);
+                }
+            });
+
+            nextToTemplatesBtn.addEventListener('click', () => {
+                // Sync the editor select to the step 2 select
+                resizeModeEditorSelect.value = resizeModeSelect.value;
+                showStep(2);
+            });
+            backToUploadBtn.addEventListener('click', () => showStep(1));
+
+            // V2: New template buttons
+            templateGrid.addEventListener('click', (e) => {
+                const button = e.target.closest('.grid-starter-btn');
+                if (!button) return;
+
+                // Sync the editor select to the step 2 select
+                resizeModeEditorSelect.value = resizeModeSelect.value;
+
+                const specialTemplate = button.dataset.template;
+
+                if (specialTemplate) {
+                    if (specialTemplate.includes('stack-left-main-center-stack-right')) {
+                        const parts = specialTemplate.split('-');
+                        const config = {
+                            mainDirection: 'horizontal',
+                            stackDirection: 'vertical',
+                            stackCount: parseInt(parts[parts.length - 1]),
+                            mainSize: 50,
+                            stackSize: 25
+                        };
+                        initializeTripleLayout(config);
+
+                    } else if (specialTemplate.includes('stack-top-main-center-stack-bottom')) {
+                        const parts = specialTemplate.split('-');
+                        const config = {
+                            mainDirection: 'vertical',
+                            stackDirection: 'horizontal',
+                            stackCount: parseInt(parts[parts.length - 1]),
+                            mainSize: 50,
+                            stackSize: 25
+                        };
+                        initializeTripleLayout(config);
+
+                    } else if (specialTemplate === 'large-center-3x3') {
+                        initializeLargeCenterLayout();
+                    } else {
+                        const parts = specialTemplate.split('-');
+                        const config = {
+                            main: parts[1], // 'left', 'right', 'top', 'bottom'
+                            stack: parts[3], // 'left', 'right', 'top', 'bottom'
+                            stackCount: parseInt(parts[4]), // 2, 3, 4
+                        };
+
+                        if (config.main === 'left' || config.main === 'right') {
+                            config.mainDirection = 'horizontal';
+                            config.stackDirection = 'vertical';
+                            config.mainSize = 66.7;
+                            config.stackSize = 33.3;
+                        } else {
+                            config.mainDirection = 'vertical';
+                            config.stackDirection = 'horizontal';
+                            config.mainSize = 66.7;
+                            config.stackSize = 33.3;
+                        }
+                        initializeNestedLayout(config);
+                    }
+                }
+                else if (button.dataset.rows && button.dataset.cols) {
+                    const rows = parseInt(button.dataset.rows);
+                    const cols = parseInt(button.dataset.cols);
+                    initializeGrid(rows, cols);
+                }
+            });
+
+            document.getElementById('custom-grid-btn').addEventListener('click', () => {
+                resizeModeEditorSelect.value = resizeModeSelect.value;
+                const rowsInput = prompt("Enter number of rows (e.g., 3):", "3");
+                if (rowsInput === null) return; // User cancelled
+
+                const colsInput = prompt("Enter number of columns (e.g., 4):", "4");
+                if (colsInput === null) return; // User cancelled
+
+                const rows = parseInt(rowsInput);
+                const cols = parseInt(colsInput);
+
+                if (isNaN(rows) || isNaN(cols) || rows <= 0 || cols <= 0 || rows > 20 || cols > 20) {
+                    alert("Please enter valid positive numbers for rows and columns (max 20).");
+                    return;
+                }
+
+                initializeGrid(rows, cols);
+            });
+
+            // Step 3 Controls
+            spacingSelect.addEventListener('change', rebuildGrid);
+            borderColorInput.addEventListener('input', updateAllSlotStyles);
+            cornerRadiusSelect.addEventListener('change', rebuildGrid);
+            aspectRatioSelect.addEventListener('change', updateAspectRatio);
+
+            // Sync the two resize mode dropdowns and rebuild
+            resizeModeSelect.addEventListener('change', () => {
+                resizeModeEditorSelect.value = resizeModeSelect.value;
+                if (currentGridConfig) rebuildGrid(); // Rebuild if a grid exists
+            });
+            resizeModeEditorSelect.addEventListener('change', () => {
+                resizeModeSelect.value = resizeModeEditorSelect.value;
+                if (currentGridConfig) rebuildGrid(); // Rebuild if a grid exists
+            });
+
+            changeTemplateBtn.addEventListener('click', () => {
+                // Sync the step 2 select to the editor select
+                resizeModeSelect.value = resizeModeEditorSelect.value;
+                showStep(2);
+            });
+
+            downloadBtn.addEventListener('click', exportCollage);
+            saveProjectBtn.addEventListener('click', exportProjectState);
+            loadProjectInput.addEventListener('change', loadProject);
+            loadProjectInputStep1.addEventListener('change', loadProject);
+
+            // Text Modal Controls
+            editTextBtn.addEventListener('click', openTextModal);
+            cancelTextBtn.addEventListener('click', closeTextModal);
+            okTextBtn.addEventListener('click', saveTextState);
+            deleteTextBtn.addEventListener('click', deleteText);
+
+            textBgToggle.addEventListener('change', (e) => {
+                textBgColorInput.disabled = e.target.value === 'transparent';
+            });
+            textBoldBtn.addEventListener('click', (e) => {
+                const isActive = textBoldBtn.getAttribute('data-active') === 'true';
+                textBoldBtn.setAttribute('data-active', !isActive);
+                textBoldBtn.classList.toggle('bg-blue-200', !isActive);
+            });
+            textUnderlineBtn.addEventListener('click', (e) => {
+                const isActive = textUnderlineBtn.getAttribute('data-active') === 'true';
+                textUnderlineBtn.setAttribute('data-active', !isActive);
+                textUnderlineBtn.classList.toggle('bg-blue-200', !isActive);
+            });
+
+
+            // Global pan listeners
+            document.addEventListener('mousemove', onPan);
+            document.addEventListener('mouseup', endPan);
+            document.addEventListener('touchmove', onPan, { passive: false });
+            document.addEventListener('touchend', endPan);
+
+            // Global wheel listener for zoom
+            document.getElementById('collage-wrapper').addEventListener('wheel', onWheel, { passive: false });
+
+            // Bug fix for color picker overlay
+            const handleColorPickerFocus = () => {
+                textModal.classList.remove('bg-opacity-70');
+                textModal.classList.add('bg-opacity-0');
+            };
+
+            const handleColorPickerBlur = () => {
+                textModal.classList.add('bg-opacity-70');
+                textModal.classList.remove('bg-opacity-0');
+            };
+
+            [textColorInput, textBgColorInput].forEach(input => {
+                input.addEventListener('focus', handleColorPickerFocus);
+                input.addEventListener('blur', handleColorPickerBlur);
+            });
+
+            // Initial setup
+            showStep(1);
+
+        });
+    </script>
+    <footer class="text-center mt-12 mb-4 text-xs text-gray-400">
+        <p>Copyright 2026 Eon Ear Productions.</p>
+    </footer>
+</body>
+
+</html>
