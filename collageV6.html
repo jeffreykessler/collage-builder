@@ -2482,20 +2482,22 @@
                                 split.setSizes(state.splits[index]);
                             });
                         }
-                        state.slots.forEach(savedSlot => {
-                            const domSlot = document.getElementById(savedSlot.id);
-                            if (domSlot) {
-                                const slotState = collageSlots.find(s => s.element === domSlot);
-                                if (slotState) {
-                                    slotState.imageId = savedSlot.imageId;
-                                    slotState.transform = savedSlot.transform;
-                                    if (savedSlot.imageId !== null && savedSlot.imageId !== undefined) {
-                                        const imageObj = uploadedImages.find(img => img.id === savedSlot.imageId);
-                                        if (imageObj) {
-                                            addImageToSlot(domSlot, imageObj, false);
-                                            setTimeout(() => applyTransform(domSlot), 0);
-                                        }
-                                    }
+                        state.slots.forEach((savedSlot, index) => {
+                            const slotState = collageSlots[index];
+                            if (slotState) {
+                                const domSlot = slotState.element;
+                                slotState.imageId = savedSlot.imageId;
+                                slotState.transform = savedSlot.transform;
+                                
+                                const imageObj = savedSlot.imageId != null ? uploadedImages.find(img => img.id === savedSlot.imageId) : null;
+                                
+                                if (imageObj) {
+                                    addImageToSlot(domSlot, imageObj, false);
+                                } else {
+                                    const existingImg = domSlot.querySelector('.image-clipper img');
+                                    if (existingImg) existingImg.remove();
+                                    const placeholder = domSlot.querySelector('.placeholder-text');
+                                    if (placeholder) placeholder.style.display = 'block';
                                 }
                             }
                         });
